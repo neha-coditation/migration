@@ -14,8 +14,8 @@ export function prepareFidelity(document){
    $('input[type=search]').filter((_,e)=>/blogs/i.test($(e).attr('placeholder')||$(e).attr('aria-label')||'')).remove();
    repairs.push('Coditation blog: retain original cards and layout; remove the previously rejected search and topic controls.');
   }
-  $('head').append(`<style data-migration-repair="coditation">body{overflow-x:clip}html{scroll-behavior:auto}#testimonial.swiper{overflow:visible!important}.insight-checkbox-field.fs-cmsfilter_active .insight-checkbox{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m3 8 3 3 7-7' fill='none' stroke='%23524ff4' stroke-width='2'/%3E%3C/svg%3E")!important;background-color:rgba(73,118,255,.3)!important;border:1px solid #3064fe!important}</style>`);
-  repairs.push('Coditation: restore selected filter tick, sticky overflow and testimonial neighboring-card visibility.');
+  $('head').append(`<style data-migration-repair="coditation">body{overflow-x:clip}html{scroll-behavior:auto}</style>`);
+  repairs.push('Coditation: retain original checkbox appearance and slider overflow while preventing page-level horizontal overflow.');
  }
  // Preserve original engines. No blanket reveal styles, replacement nav, or duplicate slider initialization.
  const implementation={animations:{inlineScripts:$('script:not([src])').toArray().filter(e=>/gsap|THREE|Swiper|Globe|lottie|requestAnimationFrame|ScrollTrigger|animate\(/i.test($(e).text())).length,scriptURLs:$('script[src]').map((_,e)=>$(e).attr('src')).get(),targets:$('[data-w-id],canvas,[data-animation-type=lottie],lottie-player,dotlottie-player').length},illustrations:{images:$('img').length,inlineSVG:$('svg').length,canvas:$('canvas').length,lottie:$('[data-animation-type=lottie],lottie-player,dotlottie-player').length},interactions:{menus:$('.w-nav-button').length,dropdowns:$('.w-dropdown-toggle').length,sliders:$('.swiper,.w-slider').length,accordions:$('details').length,filters:$('[fs-cmsfilter-element=filters],[fs-list-element=filters]').length}};
