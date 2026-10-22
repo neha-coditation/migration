@@ -26,7 +26,7 @@ const server=createServer(async(req,res)=>{
   if(url.pathname==='/api/jobs'&&req.method==='GET'){json(res,200,{jobs:[...jobs.values()].sort((a,b)=>b.createdAt.localeCompare(a.createdAt))});return;}
   if(url.pathname==='/api/jobs'&&req.method==='POST'){
    if([...jobs.values()].filter(j=>['queued','running'].includes(j.status)).length>=5){json(res,429,{error:'Five jobs are already queued or running.'});return;}
-   const input=await body(req);const source=await policy(String(input.url||''));const maxPages=Number(input.maxPages??3);if(!Number.isInteger(maxPages)||maxPages<1||maxPages>20)throw new Error('Choose between 1 and 20 pages.');
+   const input=await body(req);const source=await policy(String(input.url||''));const maxPages=Number(input.maxPages??3);if(!Number.isInteger(maxPages)||maxPages<1||maxPages>100)throw new Error('Choose All pages or a page count between 1 and 100.');
    const extraPaths=String(input.extraPaths||'').split('\n').map(s=>s.trim()).filter(Boolean);if(extraPaths.length>30)throw new Error('At most 30 additional paths are supported.');for(const p of extraPaths){if(new URL(p,source).origin!==source.origin)throw new Error('Additional paths must use the same website origin.');}
    const job={id:crypto.randomUUID(),url:source.href,maxPages,extraPaths,status:'queued',stage:'queued',progress:0,message:'Waiting to start',events:[],createdAt:new Date().toISOString()};jobs.set(job.id,job);await save(job);json(res,202,{job});processQueue();return;
   }
