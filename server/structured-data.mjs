@@ -1,0 +1,3 @@
+import {load} from 'cheerio';
+// Some exports strip the script wrapper and leave JSON-LD as visible head/body text.
+export function repairStructuredData(html){const $=load(html);let repaired=0;for(const parent of ['head','body'])$(parent).contents().each((_,node)=>{if(node.type!=='text')return;const text=(node.data||'').trim();if(!text.startsWith('{')||!text.includes('"@context"'))return;try{const value=JSON.parse(text);if(!value['@context'])return;$(node).replaceWith('<script type="application/ld+json">'+JSON.stringify(value).replaceAll('<','\\u003c')+'</script>');repaired++;}catch{}});return {html:$.html(),repaired};}

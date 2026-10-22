@@ -1,0 +1,47 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import {load} from 'cheerio';
+import {canonical,crawlable,routePath} from './url-policy.mjs';
+import {writeJSON} from './files.mjs';
+export async function publicFetch(input,{policy,signal,limit=24*1024*1024}={}){
+ let url=input;
+ for(let n=0;n<6;n++){
+  await policy(url);const res=await fetch(url,{redirect:'manual',signal:AbortSignal.any([signal||new AbortController().signal,AbortSignal.timeout(25000)]),headers:{'User-Agent':'AstroMigrationStudio/0.1 (public website migration)'}});
+  if(res.status>=300&&res.status<400){const location=res.headers.get('location');await res.body?.cancel();if(!location)throw new Error('Redirect without destination.');url=new URL(location,url).href;continue;}
+  if(!res.ok){await res.body?.cancel();throw new Error(`HTTP ${res.status}: ${url}`);}
+  const chunks=[];let bytes=0;
+  for await(const chunk of res.body){bytes+=chunk.length;if(bytes>limit)throw new Error('Resource exceeds capture size limit.');chunks.push(chunk);}
+  return {url,type:(res.headers.get('content-type')||'application/octet-stream').split(';')[0],buffer:Buffer.concat(chunks)};
+ }throw new Error('Too many redirects.');
+}
+export function resourceReferences(text,type,base){
+ const urls=[];const add=u=>{try{if(['/migration-collections.js','/migration-guard.js'].includes(u))return;if(u&&!/^(data:|blob:|#)/.test(u)){const url=new URL(u,base);if(['http:','https:'].includes(url.protocol)){url.hash='';urls.push(url.href);}}}catch{}};
+ if(type.includes('svg')){const $=load(text,{xmlMode:true});$('[href],[xlink\\:href]').each((_,e)=>add($(e).attr('href')||$(e).attr('xlink:href')));$('style,[style]').each((_,e)=>urls.push(...resourceReferences($(e).attr('style')||$(e).text(),'text/css',base)));}
+ if(type.includes('html')){const $=load(text);$('[src],link[href],video[poster]').each((_,e)=>{const tag=$(e);if(e.name==='link'&&!/stylesheet|icon|preload/.test(tag.attr('rel')||''))return;add(tag.attr('src')||tag.attr('href')||tag.attr('poster'));});$('[data-src],svg image[href],svg use[href],lottie-player[src],dotlottie-player[src]').each((_,e)=>add($(e).attr('data-src')||$(e).attr('src')||$(e).attr('href')));$('[srcset]').each((_,e)=>$(e).attr('srcset').split(',').forEach(v=>add(v.trim().split(/\s+/)[0])));$('style,[style]').each((_,e)=>{urls.push(...resourceReferences($(e).attr('style')||$(e).text(),'text/css',base));});$('script:not([src])').each((_,e)=>{if(!/json/i.test($(e).attr('type')||''))urls.push(...resourceReferences($(e).text(),'application/javascript',base));});}
+ if(type.includes('css')){for(const m of text.matchAll(/url\(\s*(?:"([^"]*)"|'([^']*)'|([^\s)]*))\s*\)|@import\s+["']([^"']+)/g))add(m[1]??m[2]??m[3]??m[4]);}
+ if(/javascript/.test(type)){if(/webflow\./.test(base)&&text.includes('webflow.achunk.'))for(const match of text.matchAll(/:\s*"([a-f0-9]{16})"/g))add('webflow.achunk.'+match[1]+'.js');for(const m of text.matchAll(/(?:\bfrom\s*|\bimport\s*\(?|\bfetch\s*\()\s*["']([^"']+)["']/g))if(/^(https?:|\/|\.\/|\.\.\/)/.test(m[1]))add(m[1]);}
+ if(/json/.test(type)){try{const data=JSON.parse(text);for(const a of data.assets||[])if(a.p&&!a.p.startsWith('data:'))add((a.u||'')+a.p);for(const a of [...data.images||[],...data.buffers||[]])if(a.uri)add(a.uri);}catch{}}
+ if(/javascript/.test(type)){for(const m of text.matchAll(/(?:\.load\s*\(\s*|\b(?:path|src)\s*:\s*)["']([^"']+)["']/g))if(/\.(?:json|lottie|gltf|glb|bin|png|jpe?g|webp|svg|avif)(?:[?#].*)?$/i.test(m[1]))add(m[1]);}
+ return [...new Set(urls)];
+}
+export function markupInventory(text,url){
+ const $=load(text),title=$('title').text(),description=$('meta[name=description]').attr('content')||'',canonicalURL=$('link[rel=canonical]').attr('href')||'';const links=$('a[href]').map((_,e)=>{try{return new URL($(e).attr('href'),url).href;}catch{return '';}}).get();
+ const scripts=$('script').map((_,e)=>({src:$(e).attr('src')||null,inlineBytes:$(e).text().length})).get();const forms=$('form').map((_,e)=>({name:$(e).attr('name')||$(e).attr('id')||'Unnamed form',action:$(e).attr('action')||''})).get();const cmsLists=$('[fs-cmsload-element=list],[fs-cmsfilter-element=list],[fs-list-element=list]').length;const canvas=$('canvas').length;
+ $('script,style,noscript').remove();return {title,description,canonical:canonicalURL,text:$('body').text().replace(/\s+/g,' ').trim(),h1:$('h1').map((_,e)=>$(e).text()).get(),links,scripts,forms,cmsLists,canvas,sticky:null,controls:{menus:$('.w-nav-button').length,sliders:$('.swiper,.w-slider').length,tabs:$('.w-tab-link,[role=tab]').length,filters:$('[fs-cmsfilter-element=filters]').length},scrollHeight:null};
+}
+export async function captureHTTP(job,root,{policy,signal,update,reason}){
+ await fs.mkdir(path.join(root,'captured/resources'),{recursive:true});await fs.mkdir(path.join(root,'evidence'),{recursive:true});const documents=[],resources=new Map(),warnings=['Browser capture unavailable. HTTP source capture was used. Rendered content, animations and interaction states were not captured.',reason],assetQueue=[],assetSeen=new Set(),visited=new Set();const origin=new URL(job.url).origin;const queue=[canonical(job.url),...job.extraPaths.map(p=>canonical(new URL(p,job.url)))];let bytes=0;
+ while(queue.length&&documents.length<job.maxPages){if(signal.aborted)throw new Error('Migration cancelled.');const url=queue.shift();if(visited.has(url))continue;visited.add(url);update({stage:'capture',progress:12+Math.round(documents.length/job.maxPages*28),message:`Capturing source HTML without browser QA: ${url}`});
+  try{const response=await publicFetch(url,{policy,signal});if(new URL(response.url).origin!==origin||!response.type.includes('html'))throw new Error('Source is not an HTML page on the requested origin.');const html=response.buffer.toString(),inventory=markupInventory(html,response.url);documents.push({url:canonical(response.url),html,inventory,evidence:[]});await fs.writeFile(path.join(root,`captured/page-${documents.length-1}.html`),html);assetQueue.push(...resourceReferences(html,response.type,response.url));for(const u of inventory.links){if(crawlable(u,origin)){const next=canonical(u);if(!visited.has(next)&&!queue.includes(next))queue.push(next);}}}catch(error){warnings.push(error.message);}
+ }
+ while(assetQueue.length&&assetSeen.size<750&&bytes<250*1024*1024){if(signal.aborted)throw new Error('Migration cancelled.');const batch=assetQueue.splice(0,8).filter(u=>!assetSeen.has(u));for(const u of batch)assetSeen.add(u);await Promise.all(batch.map(async url=>{try{const result=await publicFetch(url,{policy,signal});let suffix=path.extname(new URL(url).pathname);if(!/^\.[a-z\d]{1,8}$/i.test(suffix))suffix={'text/css':'.css','application/javascript':'.js','text/javascript':'.js','image/svg+xml':'.svg'}[result.type]||'.bin';const file=crypto.createHash('sha256').update(url).digest('hex').slice(0,24)+suffix,disk=path.join(root,'captured/resources',file);await fs.writeFile(disk,result.buffer);bytes+=result.buffer.length;const resource={file,disk,type:result.type,bytes:result.buffer.length};resources.set(url,resource);if(result.url!==url)resources.set(result.url,resource);if(/css|javascript|json|svg|text\/html/.test(result.type))assetQueue.push(...resourceReferences(result.buffer.toString(),result.type,result.url));}catch(error){warnings.push(`Asset unavailable: ${url} (${error.message})`);}}));}
+ if(!documents.length)throw new Error('No public HTML pages could be captured. '+warnings.slice(-1)[0]);
+ await writeJSON(path.join(root,'captured/inventory.json'),{mode:'http-fallback',documents:documents.map(({html,...x})=>x),warnings,omittedRoutes:queue});return {mode:'http-fallback',documents,resources,warnings,blocked:[],omittedRoutes:queue.filter(u=>!visited.has(u)),bytes};
+}
+export async function completeResources(documents,resources,root,{policy,signal}){
+ const queue=documents.flatMap(d=>resourceReferences(d.html,'text/html',d.url));const seen=new Set(resources.keys());for(const [url,asset] of resources){if(/css|javascript|json|svg/.test(asset.type))queue.push(...resourceReferences(await fs.readFile(asset.disk,'utf8'),asset.type,asset.originalURL||url));}const warnings=[];let bytes=[...resources.values()].reduce((n,r)=>n+r.bytes,0);
+ while(queue.length&&seen.size<1500&&bytes<250*1024*1024){const batch=queue.splice(0,8).filter(u=>!seen.has(u));for(const u of batch)seen.add(u);
+  await Promise.all(batch.map(async url=>{try{const response=await publicFetch(url,{policy,signal});if(bytes+response.buffer.length>250*1024*1024)throw new Error('Total resource budget reached.');let suffix=path.extname(new URL(url).pathname);if(!/^\.[a-z\d]{1,8}$/i.test(suffix))suffix={'text/css':'.css','application/javascript':'.js','text/javascript':'.js','image/svg+xml':'.svg'}[response.type]||'.bin';const file=crypto.createHash('sha256').update(url).digest('hex').slice(0,24)+suffix,disk=path.join(root,'captured/resources',file);await fs.writeFile(disk,response.buffer);resources.set(url,{file,disk,type:response.type,bytes:response.buffer.length});bytes+=response.buffer.length;if(/css|javascript|json|svg|text\/html/.test(response.type))queue.push(...resourceReferences(response.buffer.toString(),response.type,response.url));}catch(error){warnings.push(`Unresolved resource ${url}: ${error.message}`);}}));
+ }return {warnings,bytes};
+}

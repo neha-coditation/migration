@@ -1,0 +1,26 @@
+
+> astro-migration-studio@0.3.0 test:pipeline
+> node test/pipeline.mjs
+
+discover Validating source and opening an isolated browser
+capture Capturing source HTML without browser QA: http://127.0.0.1:51419/
+capture Capturing source HTML without browser QA: http://127.0.0.1:51419/about
+generate Generating real Astro routes for 2 pages
+build Running Astro production build
+package Packaging Astro source, build, screenshots and QA evidence
+{
+  "build": "passed",
+  "status": "needs-review",
+  "captureMode": "http-fallback",
+  "browserQA": "not-run",
+  "pages": 2,
+  "resources": 3,
+  "failures": [
+    "Visual and interaction QA did not run because the browser could not launch"
+  ],
+  "warnings": [
+    "Browser capture unavailable. HTTP source capture was used. Rendered content, animations and interaction states were not captured.",
+    "Browser could not launch. Run npm run setup:browser in a normal local terminal. Visual and interaction QA are unverified.",
+    "CMS list detected: public pagination is recovered where available, but unseen CMS records cannot be inferred from a URL"
+  ]
+}

@@ -1,0 +1,83 @@
+{
+  "blog": {
+    "visibleBefore": 15,
+    "visibleAfter": 30,
+    "searchFields": 0,
+    "topicControls": 0,
+    "brokenImages": 0
+  },
+  "rootHomepage": {
+    "particleFramesBefore": [
+      "647",
+      "647",
+      "647",
+      "647",
+      "647"
+    ],
+    "particleFramesLater": [
+      "7400",
+      "7400",
+      "7400",
+      "7400",
+      "7400"
+    ],
+    "heroOpacity": "1",
+    "brokenImages": 0,
+    "responsiveMenuOpened": true,
+    "testimonial": {
+      "active": "Built on Trust and Transparency\"Coditation experience for Huddl.a",
+      "cards": [
+        {
+          "active": false,
+          "left": -584.005126953125,
+          "right": 274.658935546875
+        },
+        {
+          "active": true,
+          "left": 290.658935546875,
+          "right": 1149.322998046875
+        },
+        {
+          "active": false,
+          "left": 1165.322998046875,
+          "right": 2023.987060546875
+        }
+      ],
+      "viewport": 1440
+    }
+  },
+  "githubMobile": {
+    "brokenImages": 0,
+    "canonical": "https://example.github.io/coditation-preview/",
+    "documentWidth": 390,
+    "frames": [
+      "710",
+      "710",
+      "710",
+      "710",
+      "710"
+    ],
+    "scriptsOutsideBase": [],
+    "title": "Coditation | Enterprise AI & Data Engineering Solutions",
+    "viewport": 390,
+    "laterFrames": [
+      "1518",
+      "1518",
+      "1518",
+      "1518",
+      "1518"
+    ],
+    "consoleErrors": []
+  },
+  "finance": {
+    "checked": true,
+    "indicator": {
+      "background": "rgba(73, 118, 255, 0.3)",
+      "border": "rgb(48, 100, 254)",
+      "image": "url(\"http://127.0.0.1:50988/coditation-preview/media/63aa51168c107beb762b1246.svg\")"
+    },
+    "labelClass": "w-checkbox insight-checkbox-field fs-cmsfilter_active",
+    "matchingRecords": 7
+  },
+  "fullAutomatedBrowserQA": "not-run; Chromium launch blocked in shell environment"
+}

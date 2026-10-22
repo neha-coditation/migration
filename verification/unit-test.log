@@ -1,0 +1,39 @@
+
+> astro-migration-studio@0.3.0 test
+> node --test test/*.test.mjs
+
+✔ private and reserved addresses cannot be source URLs (5.905291ms)
+✔ a DNS answer containing any private address is rejected (0.107542ms)
+✔ route discovery excludes other origins queries and media (0.222083ms)
+✔ rewrite assets while retaining external navigation and source structure (5.356875ms)
+✔ CSS and observed script URLs are localized (0.31575ms)
+✔ artifact traversal is rejected (0.090292ms)
+✔ inline fetches and Webflow runtime chunks are discovered without executing them (1.808208ms)
+✔ local collection recovery adds no search or topic controls (2.579458ms)
+✔ exact script URL rewriting does not corrupt URLs sharing a prefix (0.092625ms)
+✔ visual QA measures identical and different images (12.642833ms)
+✔ public CMS pagination is merged without adding UI and keeps original page size (13.570083ms)
+✔ One working particle animation cannot hide a frozen hero animation (0.672958ms)
+✔ Missing, unloaded and substituted illustrations fail independently (0.161542ms)
+✔ A correctly localized illustration matches its source identity (0.09525ms)
+✔ Early load animations are compared before later scroll samples (0.0905ms)
+✔ Lottie image and glTF texture dependencies are discovered and localized (0.626292ms)
+✔ Redirect aliases of the same captured image preserve asset identity (0.069083ms)
+✔ Stripped JSON-LD wrappers are restored without hiding article examples (6.49875ms)
+✔ A frozen canvas fails even when transform-based motion still works (0.176334ms)
+✔ Linked SVG drawings and sprite fragments remain local and intact (1.303833ms)
+✔ Pinned dependency versions agree with registry tarballs (10.325917ms)
+✔ Coditation blog repair removes rejected controls while preserving card content and layout (6.563708ms)
+✔ Other sites retain their legitimate search and topic controls (1.371667ms)
+✔ Source-driven QA rejects missing motion, sticky pinning, added UI and clipped testimonial peeks (0.156584ms)
+✔ Still or unavailable motion baseline is never reported as a verified animation (0.063666ms)
+✔ Known particle repair preserves source script dependencies and isolates scene startup (5.094125ms)
+✔ Renamed Webflow chunks resolve locally through the generated runtime guard (23.860333ms)
+ℹ tests 27
+ℹ suites 0
+ℹ pass 27
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 169.508167

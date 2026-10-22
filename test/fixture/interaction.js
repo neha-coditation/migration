@@ -1,0 +1,4 @@
+document.querySelector('.w-nav-button')?.addEventListener('click',e=>{const button=e.currentTarget;const open=button.getAttribute('aria-expanded')!=='true';button.setAttribute('aria-expanded',String(open));document.querySelector('nav').hidden=!open;});
+document.querySelector('.swiper-button-next')?.addEventListener('click',()=>{const slides=[...document.querySelectorAll('.swiper-wrapper article')];const index=slides.findIndex(s=>s.classList.contains('swiper-slide-active'));slides.forEach((s,n)=>{s.hidden=n!==(index+1)%slides.length;s.classList.toggle('swiper-slide-active',!s.hidden);});});
+document.querySelector('[data-filter]')?.addEventListener('change',e=>{document.querySelectorAll('.work article').forEach(item=>item.hidden=e.target.checked&&!item.textContent.includes('Finance'));});
+document.querySelector('[data-load-more]')?.addEventListener('click',()=>{document.querySelectorAll('.work article').forEach(item=>item.hidden=false);});
