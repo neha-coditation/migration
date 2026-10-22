@@ -35,9 +35,9 @@ export async function captureSite(job,root,{policy,signal,update}){
    })();pending.add(task);task.finally(()=>pending.delete(task));
   });
   const page=await context.newPage();
-  while(queue.length&&documents.length<job.maxPages){
+  while(queue.length&&(job.maxPages===0||documents.length<job.maxPages)){
    throwAbort();const url=queue.shift();if(visited.has(url))continue;visited.add(url);await policy(url);
-   update({stage:'capture',progress:12+Math.round(documents.length/job.maxPages*28),message:`Capturing ${url}`});
+   update({stage:'capture',progress:12+Math.round(documents.length/(job.maxPages||Math.max(documents.length+queue.length,1))*28),message:`Capturing ${url}`});
    try{
     const response=await page.goto(url,{waitUntil:'load',timeout:30000});if(!response||!response.ok())throw new Error(`HTTP ${response?.status()||'no response'}`);
     const final=canonical(page.url());if(new URL(final).origin!==origin)throw new Error('Page redirected outside the source origin.');
