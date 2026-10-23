@@ -11,7 +11,6 @@ export async function migrateSessionWithActions(project,pages,{onPage,onMetadata
  const repo=repositoryName(repository);
  if(!pages.length)throw new Error('Select pages before starting a session');
  const sessionId=project.sessionId || crypto.randomUUID();
- const flag='MIGSESSION_'+sessionId.replace(/-/g,'').toUpperCase();
  const cli=async(args,options={})=>{
   const result=await runner('gh',args,{timeout:options.timeout||60000});
   if(result.code!==0)throw new Error('GitHub session worker operation failed: '+args.slice(0,2).join(' '));
@@ -22,7 +21,6 @@ export async function migrateSessionWithActions(project,pages,{onPage,onMetadata
  const restoredRun=runId;
  const seen=new Set();
  try{
-  await cli(['variable','set',flag,'--body','running','--repo',repo]);
   await onMetadata?.({sessionId,sessionRunId:runId,sessionFinished:false});
   if(!runId||project.sessionFinished||project.sessionResumeRequested){
    runId=null;
@@ -91,8 +89,9 @@ export async function migrateSessionWithActions(project,pages,{onPage,onMetadata
  }
 }
 export async function setSessionFinish(project,{runner=run,repository=process.env.MIGRATION_WORKER_REPOSITORY}={}){
- if(!project.sessionId)throw new Error('No running worker session to finish');
- const name='MIGSESSION_'+project.sessionId.replace(/-/g,'').toUpperCase();
- const result=await runner('gh',['variable','set',name,'--body','finish','--repo',repositoryName(repository)],{timeout:60000});
- if(result.code!==0)throw new Error('Could not notify the GitHub session worker to finish after the active page');
+ if(!project.sessionId||!Number.isSafeInteger(Number(project.sessionRunId))||Number(project.sessionRunId)<1)throw new Error('Wait for the Actions migration run to start before sending Finish');
+ const repo=repositoryName(repository);
+ const result=await runner('gh',['workflow','run','migration-session-control.yml','--repo',repo,'--ref','main',
+  '-f','session_id='+project.sessionId,'-f','target_run_id='+String(project.sessionRunId)],{timeout:60000});
+ if(result.code!==0)throw new Error('Could not notify the session worker to finish after the active page');
 }
