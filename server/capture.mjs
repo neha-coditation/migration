@@ -10,7 +10,7 @@ import {writeJSON} from './files.mjs';
 const suffixes={'text/css':'.css','text/javascript':'.js','application/javascript':'.js','application/json':'.json','text/html':'.html','image/png':'.png','image/jpeg':'.jpg','image/svg+xml':'.svg','font/woff2':'.woff2'};
 export async function captureSite(job,root,{policy,signal,update}){
  const resourceDir=path.join(root,'captured/resources');await fs.mkdir(resourceDir,{recursive:true});await fs.mkdir(path.join(root,'evidence/source'),{recursive:true});
- const resources=new Map(),documents=[],warnings=[],blocked=[],pending=new Set(),attempted=new Set();let bytes=0;let resourceLimitReported=false;
+ const resources=new Map(),documents=[],warnings=[],blocked=[],pending=new Set(),attempted=new Set();let bytes=0;
  const browser=await launchBrowser();const origin=new URL(job.url).origin;const queue=[canonical(job.url),...job.extraPaths.map(p=>canonical(new URL(p,job.url)))];const visited=new Set();
  const throwAbort=()=>{if(signal.aborted)throw new Error('Migration cancelled.');};
  signal.addEventListener('abort',()=>browser.close().catch(()=>{}),{once:true});
@@ -25,8 +25,7 @@ export async function captureSite(job,root,{policy,signal,update}){
   await context.routeWebSocket(/.*/,ws=>ws.close());
   context.on('response',response=>{
    const task=(async()=>{
-    try{const url=response.url();if(attempted.has(url)||!response.ok()||!/^(https?:)/.test(url))return;
-     if(resources.size>=1500||bytes>250*1024*1024){if(!resourceLimitReported){resourceLimitReported=true;warnings.push('Resource capture limit reached: later CSS, JavaScript or animation assets may be missing.');}return;}
+    try{const url=response.url();if(attempted.has(url)||resources.size>=1500||bytes>250*1024*1024||!response.ok()||!/^(https?:)/.test(url))return;
      attempted.add(url);const headers=response.headers(),type=(headers['content-type']||'application/octet-stream').split(';')[0];
      if(Number(headers['content-length'])>24*1024*1024){warnings.push(`Resource exceeds 24 MB capture limit: ${url}`);return;}
      const buffer=await response.body();if(buffer.length>24*1024*1024||bytes+buffer.length>250*1024*1024){warnings.push(`Resource exceeds capture budget: ${url}`);return;}
@@ -36,9 +35,9 @@ export async function captureSite(job,root,{policy,signal,update}){
    })();pending.add(task);task.finally(()=>pending.delete(task));
   });
   const page=await context.newPage();
-  while(queue.length&&(job.maxPages===0||documents.length<job.maxPages)){
+  while(queue.length&&documents.length<job.maxPages){
    throwAbort();const url=queue.shift();if(visited.has(url))continue;visited.add(url);await policy(url);
-   update({stage:'capture',progress:12+Math.round(documents.length/(job.maxPages||Math.max(documents.length+queue.length,1))*28),message:`Capturing ${url}`});
+   update({stage:'capture',progress:12+Math.round(documents.length/job.maxPages*28),message:`Capturing ${url}`});
    try{
     const response=await page.goto(url,{waitUntil:'load',timeout:30000});if(!response||!response.ok())throw new Error(`HTTP ${response?.status()||'no response'}`);
     const final=canonical(page.url());if(new URL(final).origin!==origin)throw new Error('Page redirected outside the source origin.');

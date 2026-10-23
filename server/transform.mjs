@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {routePath} from './url-policy.mjs';
 export function resolveReference(value,base,resources,routes){
- if(['/migration-collections.js','/migration-guard.js'].includes(value))return value;
+ if(['/migration-collections.js','/migration-guard.js'].includes(value)||typeof value==='string'&&value.startsWith('/migrated/'))return value;
  if(!value||/^(?:data:|blob:|mailto:|tel:|#)/i.test(value))return value;
  if(/^javascript:/i.test(value))return '#';
  try { const u=new URL(value,base),hash=u.hash;u.hash='';
@@ -28,7 +28,7 @@ export function transformHTML(document,resources,routes){
  $('base,meta[http-equiv="Content-Security-Policy"]').remove();
  $('script').each((_,el)=>{const node=$(el);if(/googletagmanager\.com|google-analytics\.com|clarity\.ms|static\.hotjar\.com|analytics\.ahrefs\.com/.test(node.attr('src')||'')||!node.attr('src')&&/gtag\(|googletagmanager\.com|clarity\.ms/.test(node.text()))node.remove();});
  $('[integrity]').removeAttr('integrity');$('[crossorigin]').removeAttr('crossorigin');
- $('link[rel=preconnect],link[rel=dns-prefetch]').remove();
+ $('link[rel=preconnect],link[rel=dns-prefetch],link[rel=prerender],link[rel=prefetch]').remove();
  $('*').each((_,el)=>{const e=$(el);
   for(const attr of ['src','href','xlink:href','poster','data-src']) {const value=e.attr(attr);if(!value)continue;if(el.name==='link'&&/canonical/.test(e.attr('rel')||''))continue;e.attr(attr,resolveReference(value,base,resources,routes));}
   if(e.attr('srcset')&&!e.attr('srcset').startsWith('data:'))e.attr('srcset',e.attr('srcset').split(',').map(x=>{const [u,...rest]=x.trim().split(/\s+/);return [resolveReference(u,base,resources,routes),...rest].join(' ');}).join(', '));
@@ -39,7 +39,9 @@ export function transformHTML(document,resources,routes){
  $('script:not([src])').each((_,el)=>{if(!/json/i.test($(el).attr('type')||''))$(el).text(rewriteJS($(el).html()||'',base,resources,routes));});
  const forms=[];$('form').each((_,el)=>{if($(el).find('[type=submit]').length&&!$(el).is('[fs-cmsfilter-element=filters]'))forms.push({name:$(el).attr('name')||$(el).attr('id')||'Unnamed form',action:$(el).attr('action')||'Script controlled'});});
  if(!$('link[rel=canonical]').length)$('head').append(`<link rel="canonical" href="${base.replaceAll('&','&amp;').replaceAll('"','&quot;')}">`);
- $('head').prepend('<script src="/migration-guard.js"></script>');
+ $('script[src="/migration-guard.js"],#migration-page-assets').remove();
+ const pageMap=document.runtimeMapping?'<script type="application/json" id="migration-page-assets">'+JSON.stringify(document.runtimeMapping).replaceAll('<','\\u003c')+'</script>':'';
+ $('head').prepend(pageMap+'<script src="/migration-guard.js"></script>');
  const references=[];$('[src],link[href]').each((_,e)=>{for(const attr of ['src','href']){const u=$(e).attr(attr);if(u&&/^https?:/.test(u)&&!['canonical','alternate'].includes($(e).attr('rel')))references.push(u);}});
  return {html:$.html(),forms,remoteResources:[...new Set(references)]};
 }
@@ -55,11 +57,11 @@ export async function generateAstro(root,documents,resources,{astroVersion='7.4.
  await fs.writeFile(path.join(project,'astro.config.mjs'),`import { defineConfig } from 'astro/config';\nexport default defineConfig({site:process.env.ASTRO_SITE||undefined,base:process.env.ASTRO_BASE||'/',output:'static',compressHTML:false,build:{format:'directory'}});\n`);
  await fs.writeFile(path.join(project,'package.json'),JSON.stringify({name:'migrated-astro-site',version:'1.0.0',private:true,type:'module',scripts:{dev:'astro dev',build:'astro build',postbuild:'node scripts/github-pages.mjs',preview:'astro preview'},dependencies:{astro:astroVersion}},null,2));
  await fs.copyFile(new URL('./collection-runtime.js',import.meta.url),path.join(project,'public/migration-collections.js'));
- const mapping=Object.fromEntries([...resources].map(([url,asset])=>[url,'/migrated/'+asset.file]));
+ const mapping=Object.fromEntries([...resources].map(([url,asset])=>[asset.originalURL||url,'/migrated/'+asset.file]));
  const chunkAliases={};for(const [url,asset] of resources){const name=new URL(url).pathname.split('/').pop();if(/^webflow\.achunk\.[a-f0-9]+\.js$/.test(name))chunkAliases[name]='/migrated/'+asset.file;}
  const guard=`/* Keep observed dynamic resource URLs local. Unknown dependencies remain QA findings. */
-(()=>{const map=${JSON.stringify(mapping).replaceAll('<','\\u003c')};const sourceOrigin=${JSON.stringify(new URL(documents[0].url).origin)};
-const chunkAliases=${JSON.stringify(chunkAliases)};
+(()=>{const map={...${JSON.stringify(mapping).replaceAll('<','\\u003c')},...JSON.parse(document.getElementById?.('migration-page-assets')?.textContent||'{}')};const sourceOrigin=${JSON.stringify(new URL(documents[0].url).origin)};
+const chunkAliases=${JSON.stringify(chunkAliases)};for(const [url,file] of Object.entries(map)){try{const name=new URL(url).pathname.split('/').pop();if(/^webflow\\.achunk\\.[a-f0-9]+\\.js$/.test(name))chunkAliases[name]=file;}catch{}}
 function local(value){try{const parsed=new URL(String(value),location.href);const name=parsed.pathname.split('/').pop();if(parsed.origin===location.origin&&chunkAliases[name])return chunkAliases[name];const absolute=new URL(String(value),sourceOrigin+location.pathname).href;return map[absolute]||value;}catch{return value;}}
 const originalFetch=window.fetch;window.fetch=function(input,options){if(typeof input==='string'||input instanceof URL)input=local(input);return originalFetch.call(this,input,options);};
 const open=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(method,url,...rest){return open.call(this,method,local(url),...rest);};

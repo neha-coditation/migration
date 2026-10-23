@@ -8,7 +8,7 @@ The HTTP server uses Node's HTTP APIs and persists each job. Writes are serializ
 
 ## Capture and preservation
 
-Browser mode records resource responses, source HTML and per-viewport rendered inventories. Client-rendered pages may use the rendered DOM, with a warning about rehydration. Three source screenshots are taken at top/middle/bottom for desktop 1440x1000 and mobile 390x844. Known controls are probed through a narrow selector allowlist. Unknown buttons, submission flows, authentication and payments are not clicked. Eight pagination pages can be recovered per Finsweet v1 list, retaining the original visible page size and controls.
+Browser mode records resource responses, source HTML and per-viewport rendered inventories. Client-rendered pages may use the rendered DOM, with a warning about rehydration. Three source screenshots are taken at top/middle/bottom for desktop 1440x1000 and mobile 390x844. Known controls are probed through a narrow selector allowlist. Unknown buttons, submission flows, authentication and payments are not clicked. Up to fifty pagination pages can be recovered per Finsweet v1 list, retaining the original visible page size and controls.
 
 HTTP fallback recovers source HTML and statically discoverable resources. It does not synthesize browser evidence. Its final report contains an explicit browser-QA failure and needs-review status.
 
@@ -20,7 +20,7 @@ The studio's installed Astro packages are temporarily linked into a job for its 
 
 ## QA and verdicts
 
-Static audits inspect generated HTML, CSS resource URLs, clean-route responses, metadata and links to uncaptured source routes. Browser QA uses a separate context that blocks external runtime requests. It records page errors, text, viewport/scroll screenshots, pixel differences and observable control changes. Source and local inventories are matched per viewport. Screenshot differences above 2% require review. Observable state change is narrower evidence than complete behavior correctness.
+Static audits inspect generated HTML, CSS resource URLs, clean-route responses, metadata and links to uncaptured source routes. Browser QA uses a separate context that blocks external runtime requests. It records page errors, text, viewport/scroll screenshots, pixel differences and observable control changes. Source and local inventories are matched per viewport. Screenshot differences above the selected tolerance require review. Observable state change is narrower evidence than complete behavior correctness.
 
 Missing resources, external runtime requests, HTTP failures, observed interaction regressions and missing browser QA prevent a verified verdict. Unseen CMS records, excluded routes, SEO findings, visual differences and untested controls require review. The download can still be available when the build succeeded but fidelity needs review.
 
@@ -41,3 +41,9 @@ Source capture now measures live motion, sticky pinning, slider geometry and exi
 ## Experience QA and deployment packaging (0.3)
 
 server/experience.mjs installs an early DOM motion recorder, samples each target at five scroll positions, captures live illustration frame pairs and compares image/SVG/canvas/Lottie evidence. Read docs/EXPERIENCE-QA.md for budgets and exclusions. server/deployment.mjs emits the official-style GitHub Pages workflow and build helper; source export URLs are rewritten for ASTRO_BASE during postbuild. Deployment metadata and experience coverage are explicit in schema-3 reports.
+
+## Project orchestration and staging
+
+ProjectService persists page selection, individual job histories and independent QA status under data/projects. The shared global job queue runs each selected page separately, then a source combination builds all selected routes, localizes cross-links, content-deduplicates binary assets and preserves per-page text resource mappings. Combined builds repeat static resource and HTTP route checks; independent browser QA is retained rather than relabeled.
+
+GitHubService uses GitHub CLI device authorization and repository APIs. Preparing clones a dedicated repository locally, creates a new staging branch and copies source under astro-staging/site with a root staging workflow. Publishing checks the immutable combined timestamp and repository protections again, pushes without force, configures Pages and its staging branch environment, and polls Actions. Credentials remain with GitHub CLI and are never returned to the dashboard or ZIP. Browser QA and live publication are separately reported.

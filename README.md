@@ -1,6 +1,6 @@
 # Astro Migration Studio
 
-A separate local app for migrating public websites into real static Astro projects. Enter a URL, choose a page budget, follow the job, inspect QA, and download the source and build. No AI account, API key, live-site edits or publishing required.
+A separate local app for migrating public websites into real static Astro projects. Enter a URL, discover and select pages, migrate them one at a time, inspect individual QA and combine them into one Astro ZIP. GitHub Pages staging is optional and requires explicit repository selection and upload. No AI account or API key is needed.
 
 ## Start
 
@@ -13,6 +13,26 @@ npm start
 ```
 
 Open http://127.0.0.1:4360. On macOS, `start-studio.command` performs these steps. Browser setup downloads official Playwright Chromium into this app's `.browsers` directory. If the port is occupied, stop the other instance, or use `PORT=4361 npm start`.
+
+## Accuracy foundation (0.5)
+
+The main project workflow has no fixed selected/discovered page-count cap. Select all discovered pages and process them one at a time. Navigation and reachable same-origin sitemaps are inspected without the old 500-route/five-sitemap limits; failed sitemap fetches are recorded. This is not proof that private or unlinked content was discovered. Existing per-resource, request, memory and archive budgets still apply.
+
+**Pause for approval after every page** is enabled by default. Open page & QA, then Review & approve. Approve requires a verified result; reject keeps the page open. Accept draft requires a reason and never upgrades failed/blocked QA. Continue to next page resumes the saved paused queue. Repairing the paused page invalidates its old approval and keeps remaining routes. Stop preserves completed pages and cancels the remaining paused queue.
+
+New combinations require a review for every included page. Reviews are tied to job identity and the bytes of captured HTML, reports, resource maps and assets; changed content must be reviewed again. Existing previously combined/staged drafts are preserved. Human review is distinct from automated verification.
+
+The general in-app issue/patch/undo workspace and universal integration support are **planned**, not delivered by this foundation. Read [the staged accuracy roadmap](docs/ACCURACY-ROADMAP.md) for the current gaps, acceptance criteria, SEO/analytics preservation, backend integration work and the later audit/fix phase.
+
+## Page-by-page migration and staging (0.4)
+
+The 0.4 workflow originally limited discovery to 500 routes and selection to 100 pages. Version 0.5 removes those fixed project page-count caps. Each runs as its own job, sequentially. Open its QA report or choose **Repair & recheck**. Completed results persist across restarts. Select completed pages and **Combine** to build one clean-route Astro project and download a source ZIP. Shared binary assets are deduplicated by content; scripts, styles, SVGs and JSON retain per-page dependency mappings so changing resources cannot corrupt another page.
+
+The visual target is configurable from 0 to 2 percent. QA checks individual animations, illustration frames, scroll behavior and supported interactions. Up to three automatic repair passes restore supported exact source illustration assets, rebuild and recheck. Existing Coditation recipes restore known filter, slider, sticky and particle behavior. This is a deterministic repair system, not an AI code-rewriting engine: unsupported differences remain open for manual repair. If Chromium cannot start, the app explicitly reports **Browser QA blocked** and skips automatic evidence-based repair. A successful build never substitutes for browser QA.
+
+For staging, install [GitHub CLI](https://cli.github.com/) and connect through the app device sign-in. Load repositories and choose a dedicated repository with Pages administration permission. Review open QA findings and allow a draft if needed. **Prepare staging changes** creates a local commit and displays its repository, new `astro-staging/...` branch and file summary. **Upload and launch staging** pushes that branch, enables Pages with a staging-only environment branch policy and displays deployment progress. It never force-pushes or writes to an existing main branch. Existing Pages sites, custom domains and unrelated root workflows are rejected. Repository/source visibility follows your GitHub settings; GitHub Pages can be public even when its repository is private. No custom domain or DNS is configured.
+
+The combined ZIP includes `START-HERE.md`, a pinned Astro lockfile, Pages workflow and individual QA reports. Run `npm ci`, `npm run build`, `npm run preview` in its `astro-project` folder. Screenshots remain in each individual job download. If the first Actions run reaches deployment before initial Pages settings complete, re-run it from the shown Actions link.
 
 ## Animation, illustration, interaction and GitHub ZIP update
 
@@ -29,7 +49,7 @@ The app now includes the Coditation correction recipes and source-driven motion,
 - Falls back to HTTP HTML capture if Chromium cannot start. This fallback is explicitly unverified for visual and interaction fidelity.
 - Downloads observed images, SVG illustrations, styles, fonts, scripts and other resources. Rewrites asset references, CSS URLs, common imports/fetch literals and known dynamic resource URLs. Discovers Webflow chunk names where their manifest is visible.
 - Preserves source HTML, scripts, classes and existing controls; does not redesign the website or add search/topic/filter UI.
-- Recovers available Finsweet v1 list pagination (up to eight additional pages per list) and installs a local filtering/load-more adapter over captured records. Supports explicit field metadata and unambiguous field inference. Newer Finsweet v2, custom filters, CMS API-only content and unseen records require review.
+- Recovers available Finsweet v1 list pagination (up to 50 additional pages per list) and installs a local filtering/load-more adapter over captured records. Supports explicit field metadata and unambiguous field inference. Newer Finsweet v2, custom filters, CMS API-only content and unseen records require review.
 - Generates `astro.config.mjs`, pinned Astro 7.4.2, `src/pages/[...path].astro`, captured document data and local public assets. Executes an actual Astro build.
 - Checks routes/resources/SEO, blocks remote runtime requests during browser QA, records browser errors, compares screenshots and probes known menu/slider/tab/filter/load-more controls without submitting forms.
 - Reports pass, review and untested behavior, and packages Astro source, `dist`, build log, reports and screenshot evidence.
@@ -39,15 +59,18 @@ The app now includes the Coditation correction recipes and source-driven motion,
 
 This is a first working version, not a universal pixel-perfect migration engine. It cannot infer private CMS content, unpublished records, original backend code, authentication, checkout or unseen interaction states from a public URL. It preserves captured markup within Astro static routes, rather than refactoring every section into reusable Astro components. JavaScript, canvas/WebGL, video, consent banners, fonts, remote APIs and time-dependent content can produce differences. Unknown dynamic imports and domain-bound services may need manual fixes.
 
-Forms cannot submit in generated output; connect an independent backend before enabling them. Ordinary links to uncaptured pages remain links to the source and are reported. The page budget is a deliberate boundary, not a claim that the entire source website was migrated. Sitemap traversal, export ZIP/CMS import, custom QA recipes, headless component refactoring and model-assisted repair are follow-up work.
+Forms cannot submit in generated output; connect an independent backend before enabling them. Ordinary links to uncaptured pages remain links to the source and are reported. The page budget is a deliberate boundary, not a claim that the entire source website was migrated. Export ZIP/CMS import, custom QA recipes, headless component refactoring and model-assisted repair are follow-up work.
 
-No job is called verified if browser QA did not run. Screenshot differences above 2% are review items; low pixel difference alone does not establish complete behavior. Read the full report before using an output.
+No job is called verified if browser QA did not run. Screenshot differences above the selected tolerance are review items; low pixel difference alone does not establish complete behavior. Read the full report before using an output.
 
 ## Test
 
 ```sh
 npm test
 npm run test:pipeline
+node test/deployment.mjs
+node test/combined.mjs
+node test/staging.mjs
 ```
 
 The integration test runs a controlled two-page local source, generates Astro, performs the actual production build and checks the ZIP and static resources. Local source URLs are allowed only inside that direct test invocation; the app API rejects private/reserved destinations. When Chromium can run, the integration test also executes browser QA and asserts slider behavior. In restricted environments, it asserts the truthful HTTP fallback and Review needed result instead.
