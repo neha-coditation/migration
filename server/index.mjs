@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import crypto from 'node:crypto';
+import {BrowserHealth} from './browser-health.mjs';
 import {ProjectService} from './projects.mjs';
 import {GitHubService} from './github.mjs';
 import {migrate} from './pipeline.mjs';
@@ -10,6 +11,7 @@ import {createUrlPolicy} from './url-policy.mjs';
 import {inside,staticResponse,writeJSON,readJSON,preview} from './files.mjs';
 const ROOT=path.resolve(fileURLToPath(new URL('..',import.meta.url)));const DATA=path.resolve(process.env.MIGRATION_DATA_DIR||path.join(ROOT,'data'));await fs.mkdir(DATA,{recursive:true});const jobs=new Map(),controllers=new Map(),previews=new Map();let active=false;const PORT=Number(process.env.PORT||4360);const policy=createUrlPolicy();
 for(const name of await fs.readdir(DATA)){if(!/^[a-f\d-]{36}$/.test(name))continue;try{const job=await readJSON(path.join(DATA,name,'job.json'));if(['queued','running'].includes(job.status)){job.status='interrupted';job.message='The app stopped during this migration. Start a new job to retry.';}jobs.set(job.id,job);}catch{}}
+const browserHealth=new BrowserHealth();
 const waiters=new Map();
 let saveChain=Promise.resolve();
 function save(job){const snapshot=JSON.parse(JSON.stringify(job));saveChain=saveChain.catch(()=>{}).then(()=>writeJSON(path.join(DATA,job.id,'job.json'),snapshot));return saveChain;}
@@ -38,6 +40,9 @@ const server=createServer(async(req,res)=>{
    if([...jobs.values()].filter(j=>['queued','running'].includes(j.status)).length>=5){json(res,429,{error:'Five jobs are already queued or running.'});return;}
    const job=await createJob(await body(req));json(res,202,{job});processQueue();return;
   }
+  if(url.pathname==='/api/browser/status'&&req.method==='GET'){json(res,200,await browserHealth.check());return;}
+  if(url.pathname==='/api/browser/recheck'&&req.method==='POST'){json(res,200,await browserHealth.check({force:true}));return;}
+  if(url.pathname==='/api/browser/setup'&&req.method==='POST'){json(res,202,browserHealth.install());return;}
   if(url.pathname==='/api/projects'&&req.method==='GET'){json(res,200,{projects:projects.list()});return;}
   if(url.pathname==='/api/projects'&&req.method==='POST'){const input=await body(req);json(res,202,{project:projects.view(await projects.create(String(input.url||'')))});return;}
   if(url.pathname==='/api/git/status'&&req.method==='GET'){json(res,200,await github.status());return;}
@@ -76,5 +81,5 @@ const server=createServer(async(req,res)=>{
  }catch(error){json(res,400,{error:error.message});}
 });
 server.listen(PORT,'127.0.0.1',()=>console.log(`Astro Migration Studio http://127.0.0.1:${PORT}`));
-async function shutdown(){for(const c of controllers.values())c.abort();for(const p of previews.values())await p.close();for(const p of projects.previews.values())await p.close();for(const c of projects.discoveryControllers.values())c.abort();github.close();server.close();}
+async function shutdown(){for(const c of controllers.values())c.abort();for(const p of previews.values())await p.close();for(const p of projects.previews.values())await p.close();for(const c of projects.discoveryControllers.values())c.abort();browserHealth.close();github.close();server.close();}
 process.on('SIGINT',()=>shutdown().then(()=>process.exit()));process.on('SIGTERM',()=>shutdown().then(()=>process.exit()));

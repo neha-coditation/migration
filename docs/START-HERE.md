@@ -5,7 +5,7 @@
 3. Select the pages you want and start migration.
 4. View migrated page opens the local result inside the app.
 5. View check results shows what passed, needs attention, or could not run. Screenshot comparisons appear only when browser checks ran.
-6. Review each page, then continue and combine the reviewed results.
+6. Review each page. An accepted review automatically starts the next selected page; rejection keeps the page open. Combine after the final page is reviewed.
 
 To resume previous work, choose a saved project. The app starts with an empty address and does not open an old project automatically.
 

@@ -1,3 +1,4 @@
+import {browserFailure} from './browser-health.mjs';
 import {buildProject} from './project-build.mjs';
 import {applyEvidenceRepairs,qaIssues} from './repairs.mjs';
 import fs from 'node:fs/promises';
@@ -38,7 +39,7 @@ export async function migrate(job,root,{signal,update,allowLocal=false}){
  const policy=createUrlPolicy({allowLocal});await policy(job.url);await fs.mkdir(root,{recursive:true});
  update({stage:'discover',progress:5,message:'Validating source and opening an isolated browser'});
  let capture;
- try{capture=await captureSite(job,root,{policy,signal,update});}catch(error){if(signal.aborted)throw error;if(!/browserType.launch|Executable doesn't exist|Permission denied|browser has been closed/.test(error.message))throw error;capture=await captureHTTP(job,root,{policy,signal,update,reason:'Browser could not launch. Run npm run setup:browser in a normal local terminal. Visual and interaction QA are unverified.'});}
+ try{capture=await captureSite(job,root,{policy,signal,update});}catch(error){if(signal.aborted)throw error;if(!/browserType.launch|Executable doesn't exist|Permission denied|browser has been closed/.test(error.message))throw error;capture=await captureHTTP(job,root,{policy,signal,update,reason:browserFailure(error).message+' '+browserFailure(error).action+' Visual and interaction checks remain unverified.'});}
  for(const doc of capture.documents){prepareFidelity(doc);const recovered=await recoverCollections(doc.html,doc.url,{policy,signal});doc.html=recovered.html;doc.recoveredCollections=recovered.lists;if(recovered.lists.some(x=>!x.publicPaginationExhausted))capture.warnings.push(`${doc.url}: public CMS pagination could not be exhausted within the configured pagination budget.`);}
  const completion=await completeResources(capture.documents,capture.resources,root,{policy,signal});capture.warnings.push(...completion.warnings);capture.bytes=completion.bytes;
  update({stage:'generate',progress:48,message:`Generating real Astro routes for ${capture.documents.length} pages`});

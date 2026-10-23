@@ -5,7 +5,7 @@ export async function launchBrowser(){
  const bundled=path.resolve(fileURLToPath(new URL('../.browsers',import.meta.url)));
  if(fs.existsSync(bundled)&&!process.env.PLAYWRIGHT_BROWSERS_PATH)process.env.PLAYWRIGHT_BROWSERS_PATH=bundled;
  const {chromium}=await import('playwright');
- return chromium.launch({headless:true,chromiumSandbox:true,...(process.env.MIGRATION_BROWSER_EXECUTABLE?{executablePath:process.env.MIGRATION_BROWSER_EXECUTABLE}:{})});
+ return chromium.launch({headless:true,chromiumSandbox:true,timeout:15000,...(process.env.MIGRATION_BROWSER_EXECUTABLE?{executablePath:process.env.MIGRATION_BROWSER_EXECUTABLE}:{})});
 }
 export const VIEWPORTS=[{name:'desktop',width:1440,height:1000},{name:'mobile',width:390,height:844}];
 export async function settle(page){await page.evaluate(()=>Promise.race([document.fonts?.ready, new Promise(resolve=>setTimeout(resolve,5000))])).catch(()=>{});await page.waitForTimeout(650);}

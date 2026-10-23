@@ -14,6 +14,12 @@ npm start
 
 Open http://127.0.0.1:4360. On macOS, `start-studio.command` performs these steps. Browser setup downloads official Playwright Chromium into this app's `.browsers` directory. If the port is occupied, stop the other instance, or use `PORT=4361 npm start`.
 
+## Browser readiness and automatic next page (0.5.2)
+
+The app checks whether its browser worker can start and distinguishes a missing installation from an environment permission block. Use **Set up checking browser** if missing, then **Recheck browser**. If the environment blocks startup, start the app in a normal local terminal or use a browser-capable backend; reinstalling or a GitHub Pages frontend alone cannot remove that restriction. A readiness check does not verify migrated pages. Rerun checks on old untested captures after the browser is ready.
+
+Saving an accepted review of the currently paused page now automatically starts the next selected page and focuses it in the list. **Approve & migrate next page** requires passed checks. **Accept draft & migrate next page** requires an explicit written exception and retains unverified QA. Rejecting a page keeps it open. The final page is saved for combination rather than starting another job. The separate Continue control remains for recovering previously paused queues, and is no longer required after a new accepted review.
+
 ## Accuracy foundation (0.5)
 
 The main project workflow has no fixed selected/discovered page-count cap. Select all discovered pages and process them one at a time. Navigation and reachable same-origin sitemaps are inspected without the old 500-route/five-sitemap limits; failed sitemap fetches are recorded. This is not proof that private or unlinked content was discovered. Existing per-resource, request, memory and archive budgets still apply.
