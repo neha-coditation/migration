@@ -36,6 +36,10 @@ jobs:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           DEV_TOKEN_HASH: ${{ secrets.NEON_DEV_AUTH_TOKEN_SHA256 }}
           DEV_SUBJECT: ${{ secrets.NEON_DEV_AUTH_SUBJECT }}
+          WORKER_AUTH_TOKEN_SHA256: ${{ secrets.NEON_DEV_WORKER_TOKEN_SHA256 }}
+          GITHUB_WORKER_TOKEN: ${{ secrets.NEON_DEV_GITHUB_WORKER_TOKEN }}
+          MIGRATION_WORKER_REPOSITORY: neha-coditation/migration
+          MIGRATION_WORKER_REF: ${{ vars.NEON_DEV_WORKER_REF }}
         shell: bash
         run: |
           set -euo pipefail
@@ -48,7 +52,7 @@ jobs:
             exit 1
           fi
           export DEV_TOKEN_HASH DEV_SUBJECT
-          python3 -c 'import json,os; p="/tmp/neon-dev-env.json"; open(p,"w").write(json.dumps({"DEV_AUTH_TOKEN_SHA256":os.environ["DEV_TOKEN_HASH"],"DEV_AUTH_SUBJECT":os.environ["DEV_SUBJECT"]})); os.chmod(p,0o600)'
+          python3 scripts/neon-dev-environment.py
           trap 'rm -f /tmp/neon-dev-env.json' EXIT
           # No retries on POST: deployment creation is non-idempotent.
           curl --fail-with-body --silent --show-error \
