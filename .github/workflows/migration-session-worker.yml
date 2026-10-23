@@ -65,7 +65,10 @@ jobs:
             echo "Previous run had no completed page checkpoints; retrying the first unfinished page."
           fi
       - name: Migrate all unfinished selected pages in this worker
-        run: node scripts/run-session-worker.mjs
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await import(process.env.GITHUB_WORKSPACE + '/scripts/run-session-worker.mjs')
         env:
           MIGRATION_SESSION_ID: ${{ inputs.session_id }}
           MIGRATION_SESSION_PAGES_JSON: ${{ inputs.selected_pages_json }}

@@ -34,7 +34,10 @@ jobs:
           MIGRATION_SESSION_PAGES_JSON: '["https://www.coditation.com/","https://www.coditation.com/about"]'
           MIGRATION_VISUAL_TOLERANCE: '2'
           GITHUB_TOKEN: ${{ github.token }}
-        run: node scripts/run-session-worker.mjs
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await import(process.env.GITHUB_WORKSPACE + '/scripts/run-session-worker.mjs')
       - name: Verify both page checkpoint artifacts are durable
         env:
           GH_TOKEN: ${{ github.token }}
