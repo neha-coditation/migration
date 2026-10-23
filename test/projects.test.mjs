@@ -10,3 +10,28 @@ test('25 selected pages run sequentially and keep blocked QA honest',async()=>{c
 import {mergePageAssets} from '../server/merge-assets.mjs';
 test('combine keeps differing script captures per page and deduplicates binary assets',async()=>{const dir=await fs.mkdtemp(path.join(os.tmpdir(),'merge-assets-'));try{for(const [name,data] of [['a.js','fetch("https://cdn.example/map.json")'],['b.js','fetch("https://cdn.example/map.json");/* changed */'],['map.json','{"map":true}'],['image.png','same-binary']])await fs.writeFile(path.join(dir,name),data);const entries=['a.js','b.js'].map((js,i)=>({document:{url:'https://example.com/'+i,html:'<script src="/migrated/script.js"></script><img src="/migrated/image.png">'},assets:[{url:'https://cdn.example/app.js',file:'script.js',type:'application/javascript',disk:path.join(dir,js)},{url:'https://cdn.example/map.json',file:'map.json',type:'application/json',disk:path.join(dir,'map.json')},{url:'https://cdn.example/image.png',file:'image.png',type:'image/png',disk:path.join(dir,'image.png')}]}));const r=await mergePageAssets(entries,path.join(dir,'out'),new Set());assert.equal(r.uniqueFiles,5);assert.equal(entries[0].document.runtimeMapping['https://cdn.example/app.js'],'/migrated/p1-script.js');const transformed=transformHTML(entries[0].document,r.resources,new Set());assert.match(transformed.html,/id="migration-page-assets"/);assert.equal((transformed.html.match(/src="\/migration-guard.js"/g)||[]).length,1);assert.match(entries[0].document.html,/p1-script.js/);assert.match(entries[1].document.html,/p2-script.js/);assert.match(await fs.readFile(path.join(dir,'out/p1-script.js'),'utf8'),/\/migrated\/p1-map.json/);assert.match(await fs.readFile(path.join(dir,'out/p2-script.js'),'utf8'),/\/migrated\/p2-map.json/);const images=entries.map(e=>e.document.html.match(/<img src="([^"]+)/)[1]);assert.equal(images[0],images[1]);}finally{await fs.rm(dir,{recursive:true,force:true});}});
 test('staging status finds the workflow on its staging branch without a default-branch lookup',async()=>{const p={staging:{status:'building',repository:'owner/staging',branch:'astro-staging/test',commit:'exact-commit'}},calls=[];const github=new GitHubService({get:()=>p,save:async()=>{}},{runner:async(program,args)=>{calls.push(args);if(args[1].includes('/actions/runs?'))return {code:0,stdout:JSON.stringify({workflow_runs:[{id:1,path:'.github/workflows/astro-staging.yml',head_sha:'exact-commit',status:'completed',conclusion:'success',html_url:'https://github.com/owner/staging/actions/runs/1'}]})};return {code:0,stdout:JSON.stringify({html_url:'https://owner.github.io/staging/',cname:null})};}});const s=await github.deploymentStatus('p');assert.equal(s.status,'deployed');assert.ok(calls[0][1].includes('branch=astro-staging%2Ftest'));assert.ok(!calls.some(args=>args.includes('--workflow')));});
+
+test('restart recovery retains completed pages and migrates unfinished pages only',async()=>{
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'resume-project-'));
+ const id='aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',runs=[];
+ const pages=[{route:'/',url:'https://example.com/',status:'verified',jobIds:['old']},{route:'/next',url:'https://example.com/next',status:'migrating',jobIds:[]},{route:'/last',url:'https://example.com/last',status:'pending',jobIds:[]}];
+ const state={id,status:'running',url:'https://example.com/',pages,activeRoute:'/next',pendingRoutes:['/last'],approvalMode:'batch'};
+ await fs.mkdir(path.join(dir,'projects',id),{recursive:true});
+ await fs.writeFile(path.join(dir,'projects',id,'project.json'),JSON.stringify(state));
+ const svc=new ProjectService(dir,{getJob:()=>null,runPage:async(input,onCreated)=>{
+  runs.push(input.url);const job={id:'resume-job-'+runs.length,status:'verified'};await onCreated(job);
+  await fs.mkdir(path.join(dir,job.id),{recursive:true});
+  await fs.writeFile(path.join(dir,job.id,'report.json'),JSON.stringify({qa:{notRun:false,checks:[]},pages:[{fidelity:{checks:[]}}],failures:[],warnings:[],status:'verified'}));
+  return job;
+ }});
+ try{
+  await svc.init();const p=svc.get(id);
+  assert.equal(p.status,'interrupted');assert.equal(p.pages[0].status,'verified');
+  assert.deepEqual(p.pendingRoutes,['/next','/last']);
+  await svc.start(id,{routes:p.pages.map(x=>x.route),approvalMode:'batch'});
+  for(let n=0;n<200&&svc.running.has(id);n++)await new Promise(resolve=>setTimeout(resolve,5));
+  assert.deepEqual(runs,['https://example.com/next','https://example.com/last']);
+  assert.equal(p.pages[0].jobId,undefined);
+  assert.equal(p.status,'verified');
+ }finally{await fs.rm(dir,{recursive:true,force:true});}
+});
