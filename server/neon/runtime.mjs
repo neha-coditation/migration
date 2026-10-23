@@ -1,0 +1,37 @@
+import {timingSafeEqual, createHash} from 'node:crypto';
+import {NeonControllerState} from './controller-state.mjs';
+import {createNeonApi} from './api-handler.mjs';
+
+/**
+ * Development-only single-user bearer authentication.
+ * Production should use a real OIDC/JWT identity verifier.
+ * The secret is stored in the runtime environment, never in source.
+ */
+export function createDevelopmentAuthenticator({tokenHash, subject}) {
+  if (!/^[a-f0-9]{64}$/i.test(tokenHash || '') || !subject?.trim()) {
+    throw new Error('Set a 64-character DEV_AUTH_TOKEN_SHA256 and DEV_AUTH_SUBJECT');
+  }
+  const expected = Buffer.from(tokenHash.toLowerCase(), 'hex');
+  return async token => {
+    if (typeof token !== 'string' || token.length > 4096) return null;
+    const digest = createHash('sha256').update(token).digest();
+    return timingSafeEqual(expected, digest) ? {subject} : null;
+  };
+}
+
+/**
+ * Creates a fetch handler only after trusted Postgres and authentication
+ * implementations are supplied. No public deployment is enabled by default.
+ */
+export function createNeonRuntime({db, authenticate}) {
+  if (!db || typeof db.query !== 'function') throw new TypeError('Parameterized PostgreSQL client required');
+  if (typeof authenticate !== 'function') throw new TypeError('Verified authenticator required');
+  const state = new NeonControllerState(db);
+  const api = createNeonApi({state, authenticate});
+  return async request => {
+    if (new URL(request.url).protocol !== 'https:') {
+      return Response.json({error:'HTTPS required'}, {status:403});
+    }
+    return api(request);
+  };
+}
