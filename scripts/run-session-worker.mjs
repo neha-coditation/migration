@@ -43,7 +43,17 @@ const results=await runMigrationSession({
   const manifest=path.join(directory,'session-checkpoint.json');
   await fs.writeFile(manifest,JSON.stringify({...state,runId},null,2));
   const name=idPrefix+String(index+1).padStart(5,'0');
-  const uploaded=await artifact.uploadArtifact(name,[manifest,path.join(directory,'report.json'),path.join(directory,'migration.zip')],directory,{retentionDays:7});
+  const resourceDir=path.join(directory,'captured','resources');
+  const files=[manifest,path.join(directory,'report.json'),path.join(directory,'migration.zip')];
+  async function collect(folder){
+   for(const entry of await fs.readdir(folder,{withFileTypes:true})){
+    const location=path.join(folder,entry.name);
+    if(entry.isDirectory())await collect(location);
+    else if(entry.isFile())files.push(location);
+   }
+  }
+  await collect(resourceDir);
+  const uploaded=await artifact.uploadArtifact(name,files,directory,{retentionDays:7});
   if(!uploaded.id)throw new Error('GitHub did not confirm a durable artifact ID');
   console.log(JSON.stringify({event:'page-checkpoint',sessionId,index,artifactId:uploaded.id}));
  },
