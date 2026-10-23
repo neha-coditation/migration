@@ -16,7 +16,7 @@ test('Finish migration allows active page to finish, skips rest and drafts only 
   const job={id,status:'needs-review'};await created(job);
   started();await gate;
   await fs.mkdir(path.join(dir,id),{recursive:true});
-  await fs.writeFile(path.join(dir,id,'report.json'),JSON.stringify({qa:{notRun:false,checks:[{comparisons:[]}]},pages:[{}],warnings:[],failures:[]}));
+  await fs.writeFile(path.join(dir,id,'report.json'),JSON.stringify({status:'needs-review',qa:{notRun:false,checks:[{comparisons:[]}]},pages:[{}],warnings:[],failures:[]}));
   return job;
  }});
  svc.combineReviewed=async(id,routes,options)=>{combined.push({id,routes,options});const p=svc.get(id);p.combined={createdAt:new Date().toISOString(),routes,status:'needs-review'};p.status='needs-review';return p;};
