@@ -31,14 +31,14 @@ References: https://neon.com/docs/compute/functions/reference/runtime-limits and
 
 GitHub Actions run 39917939336 completed successfully on Ubuntu 22.04. The running app dispatched it, downloaded the artifact, validated its page identity and imported its build and browser QA evidence. The measured result was Review needed (maximum screenshot difference 8.34%, text differences, and unestablished fidelity); it was not marked verified. The first Ubuntu 24.04 attempt failed because its Chromium sandbox was unavailable; no sandbox protections were disabled. The worker runner was changed to Ubuntu 22.04 and retested successfully. Unit tests: 49 passed, including exact artifact identity, actual browser evidence, cancellation and review-to-next-page transitions. The local pipeline integration also passed its explicit browser-blocked fallback assertions; that local run is separate from the successful remote browser run.
 
-## Neon → Actions integration (feature, not deployed)
+## Neon → Actions integration
 
 `/api/neon/worker/{dispatch,claim,progress,complete}` accepts POST requests
 with a separate service bearer token. Dashboard tokens cannot use these routes.
 The Function remains disabled for workers unless `WORKER_AUTH_TOKEN_SHA256`
 is set. Configure `MIGRATION_WORKER_REPOSITORY=neha-coditation/migration`,
 `MIGRATION_WORKER_REF` (the reviewed feature branch or commit), and
-`GITHUB_WORKER_TOKEN` with Actions write access to this repository. Never
+optionally `GITHUB_WORKER_TOKEN` with Actions write access to this repository. Never
 reuse the dashboard credential. The existing Function bundle now includes the
 worker handler; no database migration is needed.
 
@@ -75,10 +75,10 @@ The supplied homepage job was observed queued at attempt 0 before development.
 No dispatch, completion, dev deployment or production write was performed as part
 of implementation. Hosted end-to-end verification requires the configuration above.
 
-The dev deployment workflow accepts repository/environment secrets
-`NEON_DEV_WORKER_TOKEN_SHA256`, `NEON_DEV_GITHUB_WORKER_TOKEN` and variable
-`NEON_DEV_WORKER_REF` together. Partial configuration fails before deployment;
-leaving all three unset keeps the worker API disabled. The dashboard and worker
+The dev deployment workflow accepts secret `NEON_DEV_WORKER_TOKEN_SHA256`
+and variable `NEON_DEV_WORKER_REF` together. Partial configuration fails before
+deployment; leaving both unset keeps the worker API disabled. A stored
+`NEON_DEV_GITHUB_WORKER_TOKEN` is optional. The dashboard and worker
 hashes must differ. The Actions worker uses `NEON_DEV_WORKER_TOKEN` separately.
 
 Run database integration tests against a disposable **local** PostgreSQL database:
@@ -99,3 +99,21 @@ batch). These existing failures were not changed in this worker feature.
 `npm run test:pipeline` passed with a real Astro build and explicit HTTP fallback;
 browser QA did not run because Chromium was not installed. No hosted Neon→Actions
 migration or successful homepage completion is claimed by these local tests.
+
+
+## Follow-up fixes and credential lifetime
+
+The local project service again defaults to per-page review, matching the UI and
+existing review tests. Explicit batch requests still run sequentially without
+pauses. A heartbeat now retains the most recent pipeline stage instead of
+replacing it with a generic stage.
+
+A persistent personal GitHub token is not required. With no `GITHUB_WORKER_TOKEN`
+in the Function, an authenticated dispatch caller supplies `X-GitHub-Token` for
+that request only. Missing credentials are rejected before consuming an attempt.
+The completion callback supplies its workflow's short-lived, Actions-read
+`GITHUB_TOKEN` for artifact verification. Tokens are neither persisted in
+Postgres nor returned in JSON. The worker bearer credential remains separate.
+The standard deployment main-branch guard remains intact. The PR CI now runs the
+full suite with a real disposable PostgreSQL service and requires browser-mode
+pipeline evidence, rather than allowing fallback to count as browser validation.

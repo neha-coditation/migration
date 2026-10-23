@@ -9,12 +9,13 @@ const root=path.resolve('worker-output',id);
 await fs.mkdir(root,{recursive:true});
 const callback=process.env.MIGRATION_WORKER_ID ? createCallbackClient() : null;
 let callbackError;
+let remoteProgress={stage:'working',progress:0};
 let pending=Promise.resolve();
 const updateRemote=body => {
  pending=pending.then(()=>callback('progress',body)).catch(error=>{callbackError=error;controller.abort();});
 };
 const controller=new AbortController();
-const heartbeat=callback ? setInterval(()=>updateRemote({stage:'working',progress:0}),60000) : null;
+const heartbeat=callback ? setInterval(()=>updateRemote(remoteProgress),60000) : null;
 const timeout=setTimeout(()=>controller.abort(),40*60*1000);
 try {
  if(callback) {
@@ -30,7 +31,10 @@ try {
  const startedAt=Date.now();
  let previousStage='start',stageStartedAt=startedAt;
  const report=await migrate(job,root,{signal:controller.signal,update:({stage,progress,message})=>{
-  if(callback) updateRemote({stage,progress:Math.min(99,Math.max(0,Math.round(progress || 0)))});
+  if(callback) {
+   remoteProgress={stage,progress:Math.min(99,Math.max(0,Math.round(progress || 0)))};
+   updateRemote(remoteProgress);
+  }
   const now=Date.now();
   if(stage!==previousStage){
    console.log(JSON.stringify({event:'stage-complete',stage:previousStage,durationMs:now-stageStartedAt}));

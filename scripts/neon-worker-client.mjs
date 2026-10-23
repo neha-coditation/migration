@@ -11,7 +11,7 @@ export function createCallbackClient(env=process.env,fetcher=fetch) {
     for (let attempt=0;attempt<3;attempt++) {
       let response;
       try {
-        response=await fetcher(new URL(`/api/neon/worker/${action}`,base),{method:'POST',headers:{Authorization:`Bearer ${env.NEON_WORKER_TOKEN}`,'Content-Type':'application/json'},body:JSON.stringify({...body,...fence}),signal:AbortSignal.timeout(30000)});
+        response=await fetcher(new URL(`/api/neon/worker/${action}`,base),{method:'POST',headers:{Authorization:`Bearer ${env.NEON_WORKER_TOKEN}`,'Content-Type':'application/json',...(action==='complete' && env.GH_TOKEN ? {'X-GitHub-Token':env.GH_TOKEN} : {})},body:JSON.stringify({...body,...fence}),signal:AbortSignal.timeout(30000)});
       } catch (error) {if(attempt===2)throw error;continue;}
       if (response.ok) return response.json();
       if (response.status<500 || attempt===2) throw new Error(`Worker callback rejected (${response.status})`);

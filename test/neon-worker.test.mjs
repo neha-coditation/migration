@@ -71,3 +71,29 @@ test('callback client restricts dev origin and never retries fencing rejection',
  const callback=createCallbackClient({NEON_WORKER_API_URL:'https://br-quiet-hat-b5fslf7n-migrationapi.compute.c-7.us-east-2.aws.neon.tech',NEON_WORKER_TOKEN:'secret'},async()=>{calls++;return Response.json({}, {status:409});});
  await assert.rejects(()=>callback('progress'));assert.equal(calls,1);
 });
+
+test('request-scoped GitHub credential is used only for that request',async()=>{
+ const requests=[];
+ const worker=createGitHubWorker({repository:'neha-coditation/migration',ref:'main',fetcher:async(url,options)=>{requests.push({url,options});return new Response(null,{status:204});}});
+ assert.equal(worker.requiresGitHubToken,true);
+ await assert.rejects(()=>worker.dispatch({jobId,workerId,attempt:1}));
+ await worker.dispatch({jobId,workerId,attempt:1},{githubToken:'short-lived'});
+ assert.equal(requests[0].options.headers.Authorization,'Bearer short-lived');
+ await assert.rejects(()=>worker.dispatch({jobId,workerId,attempt:1}));
+ assert.equal(requests.length,1);
+});
+
+test('missing dispatch credential cannot consume a job attempt',async()=>{
+ let queries=0;
+ const api=createWorkerApi({db:{query:async()=>{queries++;}},authenticateWorker:async()=>true,requiresGitHubToken:true});
+ const response=await api(new Request('https://example.org/api/neon/worker/dispatch',{method:'POST',headers:{Authorization:'Bearer service'},body:JSON.stringify({jobId})}));
+ assert.equal(response.status,503);assert.equal(queries,0);
+});
+
+test('callback client forwards Actions token for artifact verification only',async()=>{
+ const requests=[];
+ const callback=createCallbackClient({NEON_WORKER_API_URL:'https://br-quiet-hat-b5fslf7n-migrationapi.compute.c-7.us-east-2.aws.neon.tech',NEON_WORKER_TOKEN:'service',GH_TOKEN:'ephemeral'},async(url,options)=>{requests.push(options);return Response.json({ok:true});});
+ await callback('claim');await callback('complete');
+ assert.equal(requests[0].headers['X-GitHub-Token'],undefined);
+ assert.equal(requests[1].headers['X-GitHub-Token'],'ephemeral');
+});
