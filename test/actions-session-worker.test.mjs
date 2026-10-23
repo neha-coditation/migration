@@ -24,11 +24,11 @@ test('one Actions dispatch ingests a completed page artifact with its QA evidenc
    const dir=args[args.indexOf('--dir')+1];await fs.mkdir(dir,{recursive:true});
    await fs.writeFile(path.join(dir,'migration.zip'),bytes);
    await fs.writeFile(path.join(dir,'report.json'),JSON.stringify(report));
-   await fs.writeFile(path.join(dir,'session-checkpoint.json'),JSON.stringify({urls:[url],completed:[{index:0,url}]}));
+   await fs.writeFile(path.join(dir,'session-checkpoint.json'),JSON.stringify({runId:99,urls:[url],completed:[{index:0,url,status:'needs-review'}]}));
    return {code:0,stdout:''};
   }
   if(args[0]==='api'){
-   if(args[1].includes('/artifacts?'))return {code:0,stdout:JSON.stringify({artifacts:[{name:'migration-session-'+sessionId+'-page-00001',id:42}]})};
+   if(args[1].includes('/artifacts?'))return {code:0,stdout:JSON.stringify({artifacts:[{name:'migration-session-'+sessionId+'-page-00001',id:42,workflow_run:{id:99}}]})};
    if(args[1].includes('/runs?'))return {code:0,stdout:JSON.stringify({workflow_runs:[{id:99,display_title:'Migration session '+sessionId}]})};
    if(args[1].endsWith('/runs/99'))return {code:0,stdout:JSON.stringify({status:'completed',conclusion:'success'})};
   }
