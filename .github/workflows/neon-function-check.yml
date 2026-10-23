@@ -1,0 +1,32 @@
+name: Neon function build check
+on:
+  pull_request:
+    paths:
+      - 'server/neon/**'
+      - 'scripts/build-neon-function.mjs'
+      - 'test/neon-*.test.mjs'
+      - '.github/workflows/neon-function-check.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Test Neon adapters and authentication
+        run: node --test test/neon-*.test.mjs
+      - name: Package deployable Neon Function
+        run: node scripts/build-neon-function.mjs
+      - name: Inspect package without deploying
+        run: |
+          unzip -t dist/neon-migration-api.zip
+          unzip -Z1 dist/neon-migration-api.zip | grep -x index.mjs
+          unzip -Z1 dist/neon-migration-api.zip | grep -x node_modules/pg/package.json
+          if unzip -Z1 dist/neon-migration-api.zip | grep -Eq '^\\.env|secret|token'; then exit 1; fi
