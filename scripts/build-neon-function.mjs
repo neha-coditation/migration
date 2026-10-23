@@ -14,7 +14,9 @@ const command=(program,args,cwd)=>new Promise((resolve,reject)=>{
  child.on('close',code=>code===0?resolve():reject(new Error(program+' failed with exit code '+code)));
 });
 try {
- const files={'function-entry.mjs':'index.mjs','runtime.mjs':'runtime.mjs','api-handler.mjs':'api-handler.mjs','controller-state.mjs':'controller-state.mjs','worker-api.mjs':'worker-api.mjs'};
+ const entry=process.argv.includes('--worker-only') ? 'production-worker-entry.mjs' : 'function-entry.mjs';
+ const files={[entry]:'index.mjs','runtime.mjs':'runtime.mjs','api-handler.mjs':'api-handler.mjs','controller-state.mjs':'controller-state.mjs','worker-api.mjs':'worker-api.mjs'};
+ if(entry==='production-worker-entry.mjs')files['production-worker.mjs']='production-worker.mjs';
  for(const [from,to] of Object.entries(files))await fs.copyFile(path.join(sourceDir,from),path.join(directory,to));
  await fs.writeFile(path.join(directory,'package.json'),JSON.stringify({
   name:'migration-neon-function',version:'0.0.1',private:true,type:'module',

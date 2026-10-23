@@ -1,0 +1,52 @@
+name: Deploy production worker service
+on:
+  workflow_dispatch:
+    inputs:
+      release_ref:
+        description: Immutable tested release tag
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: neon-production-worker-deployment
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    environment: neon-production
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_ref }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: node --test test/neon-*.test.mjs
+      - run: node scripts/build-neon-function.mjs dist/neon-production-worker.zip --worker-only
+      - name: Deploy only worker service to production Neon branch
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          WORKER_AUTH_TOKEN_SHA256: ${{ secrets.NEON_PROD_WORKER_TOKEN_SHA256 }}
+          MIGRATION_WORKER_REF: ${{ inputs.release_ref }}
+        run: |
+          set -euo pipefail
+          test -n "$NEON_API_KEY"
+          export WORKER_RELEASE_SHA=$(git rev-parse HEAD)
+          python3 scripts/neon-production-environment.py
+          test "$(git rev-parse "refs/tags/$MIGRATION_WORKER_REF^{commit}")" = "$WORKER_RELEASE_SHA"
+          trap 'rm -f /tmp/neon-production-env.json' EXIT
+          unzip -t dist/neon-production-worker.zip >/dev/null
+          curl --fail-with-body --silent --show-error \
+            -X POST "https://console.neon.tech/api/v2/projects/bitter-rain-72060505/branches/br-proud-hall-b5rtedf4/functions/migrationworker/deployments" \
+            -H "Authorization: Bearer $NEON_API_KEY" \
+            -F "zip=@dist/neon-production-worker.zip;type=application/zip" \
+            -F "runtime=nodejs24" \
+            -F "environment=</tmp/neon-production-env.json" \
+            --output /tmp/neon-production-response.json
+          python3 -c 'import json; d=json.load(open("/tmp/neon-production-response.json")); print("Production worker deployment accepted:",d.get("id","check Neon status"))'

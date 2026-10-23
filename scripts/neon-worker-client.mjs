@@ -3,8 +3,13 @@ import path from 'node:path';
 
 export function createCallbackClient(env=process.env,fetcher=fetch) {
   const base = new URL(env.NEON_WORKER_API_URL);
-  // This feature is deliberately limited to the selected development function.
-  if (base.protocol !== 'https:' || base.hostname !== 'br-quiet-hat-b5fslf7n-migrationapi.compute.c-7.us-east-2.aws.neon.tech' || base.pathname !== '/' || base.username || base.password || base.search || base.hash) throw new Error('Expected the selected Neon development API origin');
+  // Explicit environment profiles prevent a dev credential being sent to production.
+  const origins={
+    development:'br-quiet-hat-b5fslf7n-migrationapi.compute.c-7.us-east-2.aws.neon.tech',
+    production:'br-proud-hall-b5rtedf4-migrationworker.compute.c-7.us-east-2.aws.neon.tech'
+  };
+  const profile=env.MIGRATION_ENVIRONMENT || 'development';
+  if (base.protocol !== 'https:' || base.hostname !== origins[profile] || base.pathname !== '/' || base.username || base.password || base.search || base.hash) throw new Error('Expected the selected Neon worker environment origin');
   if (!env.NEON_WORKER_TOKEN) throw new Error('Worker credential required');
   const fence={jobId:env.MIGRATION_JOB_ID,workerId:env.MIGRATION_WORKER_ID,attempt:Number(env.MIGRATION_ATTEMPT),runId:Number(env.GITHUB_RUN_ID)};
   return async (action,body={}) => {

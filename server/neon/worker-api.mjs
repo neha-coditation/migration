@@ -88,8 +88,8 @@ export function createWorkerApi({db, authenticateWorker, dispatch, verifyArtifac
   };
 }
 
-export function createGitHubWorker({repository,ref,token,fetcher=fetch}) {
-  if (!/^[\w.-]+\/[\w.-]+$/.test(repository || '') || !ref) throw new Error('GitHub worker configuration required');
+export function createGitHubWorker({repository,ref,token,workflow='neon-page-worker.yml',expectedCommit,fetcher=fetch}) {
+  if (!/^[\w.-]+\/[\w.-]+$/.test(repository || '') || !ref || !['neon-page-worker.yml','neon-production-page-worker.yml'].includes(workflow)) throw new Error('GitHub worker configuration required');
   const api = async (path,options={},context={}) => {
     const credential = token || context.githubToken;
     if (!credential) throw new Error('GitHub request credential required');
@@ -99,11 +99,11 @@ export function createGitHubWorker({repository,ref,token,fetcher=fetch}) {
   };
   return {
     requiresGitHubToken:!token,
-    dispatch: (input,context) => api('actions/workflows/neon-page-worker.yml/dispatches',{method:'POST',body:JSON.stringify({ref,inputs:{job_id:input.jobId,worker_id:input.workerId,attempt:String(input.attempt)}})},context),
+    dispatch: (input,context) => api(`actions/workflows/${workflow}/dispatches`,{method:'POST',body:JSON.stringify({ref,inputs:{job_id:input.jobId,worker_id:input.workerId,attempt:String(input.attempt)}})},context),
     verifyArtifact: async (runId,artifact,identity,context) => {
       const item = await api(`actions/artifacts/${artifact.id}`,{},context);
-      if (item.name !== `neon-${identity.jobId}-${identity.attempt}` || item.workflow_run?.id !== runId || item.expired || Date.parse(item.expires_at) <= Date.now() || !Number.isFinite(Date.parse(item.expires_at)) || item.digest !== `sha256:${artifact.sha256}` || item.size_in_bytes !== artifact.bytes) throw new Error('Artifact provenance mismatch');
-      return {expiresAt:item.expires_at,repository};
+      if ((expectedCommit && item.workflow_run?.head_sha !== expectedCommit) || item.name !== `neon-${identity.jobId}-${identity.attempt}` || item.workflow_run?.id !== runId || item.expired || Date.parse(item.expires_at) <= Date.now() || !Number.isFinite(Date.parse(item.expires_at)) || item.digest !== `sha256:${artifact.sha256}` || item.size_in_bytes !== artifact.bytes) throw new Error('Artifact provenance mismatch');
+      return {expiresAt:item.expires_at,repository,...(item.workflow_run?.head_sha ? {commit:item.workflow_run.head_sha} : {})};
     }
   };
 }
