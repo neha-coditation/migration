@@ -101,3 +101,9 @@ npm run preview
 ```
 
 Edit captured markup in `src/data/pages.json`; styles and assets are in `public/migrated`. The catch-all Astro page statically generates the captured clean routes. Reusable component conversion is separate work.
+
+## GitHub Actions browser workers
+
+Set `MIGRATION_WORKER_REPOSITORY=owner/repository` before starting the control server, or save `{"repository":"owner/repository"}` in `data/worker-config.json`. The repository must contain `.github/workflows/migration-page-worker.yml` on main and the local GitHub CLI must have Actions access. Each page runs on Ubuntu with Chromium and its OS dependencies. The controller retrieves actual build, browser QA, screenshots and Astro output from the workflow artifact. Review findings remain review findings. A worker without browser QA is rejected. Cancel requests cancel the associated run. Artifacts expire after seven days; downloaded local results remain on disk.
+
+This option moves migration execution out of a restricted local browser environment. It does not by itself host the control server online. Neon Functions still need an authenticated controller, durable queue and storage adapters; see `docs/NEON-DEPLOYMENT.md`. The Neon runtime preflight is a diagnostic, not the deployed app.

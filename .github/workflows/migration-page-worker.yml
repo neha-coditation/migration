@@ -1,0 +1,51 @@
+name: Migration page worker
+run-name: Migration page ${{ inputs.job_id }}
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: Migration job UUID
+        required: true
+        type: string
+      source_url:
+        description: Public page URL to migrate and check
+        required: true
+        type: string
+      visual_tolerance:
+        description: Maximum screenshot difference percent (0 to 2)
+        default: '0'
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: migration-page-${{ inputs.job_id }}
+  cancel-in-progress: false
+jobs:
+  migrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Install checking browser and operating system dependencies
+        run: npx playwright install --with-deps chromium
+      - name: Migrate and run browser QA for this page
+        run: node scripts/run-page-worker.mjs
+        env:
+          MIGRATION_JOB_ID: ${{ inputs.job_id }}
+          MIGRATION_SOURCE_URL: ${{ inputs.source_url }}
+          MIGRATION_VISUAL_TOLERANCE: ${{ inputs.visual_tolerance }}
+      - name: Save migration, screenshots, QA and error evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-${{ inputs.job_id }}
+          path: worker-output/${{ inputs.job_id }}/
+          if-no-files-found: error
+          retention-days: 7
