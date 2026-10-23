@@ -39,7 +39,7 @@ export async function migrateSessionWithActions(project,pages,{onPage,onMetadata
    if(runId){
     // Poll page artifact checkpoints while the runner continues processing later pages.
     for(const sourceRun of [...new Set([...(restoredRun?[restoredRun]:[]),runId])]){
-    for(let number=1;number<=Math.ceil(pages.length/100);number++){
+    for(let number=1;;number++){
      const listing=await api(`repos/${repo}/actions/runs/${sourceRun}/artifacts?per_page=100&page=${number}`);
      for(const item of listing.artifacts||[]){
       const m=new RegExp('^migration-session-'+sessionId+'-page-(\\d{5})$').exec(item.name);
@@ -72,6 +72,7 @@ export async function migrateSessionWithActions(project,pages,{onPage,onMetadata
       await onPage?.({page:pages[index],report,jobId:localId,runId:sourceRun,artifactId:item.id});
       seen.add(item.name);
      }
+     if((listing.artifacts||[]).length<100)break;
     }
     }
     const current=await api(`repos/${repo}/actions/runs/${runId}`);
