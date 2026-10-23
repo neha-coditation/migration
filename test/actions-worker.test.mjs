@@ -12,3 +12,40 @@ test('remote worker keeps review findings and requires actual QA and build evide
  assert.throws(()=>validateWorkerResult(job,result,{...report,build:'failed'}),/completed Astro/);
  assert.throws(()=>validateWorkerResult(job,{...result,status:'verified'},report),/completed Astro/);
 });
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import {migrateWithActions} from '../server/actions-worker.mjs';
+test('Actions worker dispatches the exact page and downloads a matching measured result',async()=>{
+ const root=await fs.mkdtemp(path.join(os.tmpdir(),'actions-worker-'));
+ const calls=[];
+ const runner=async(_command,args)=>{
+  calls.push(args);
+  if(args[0]==='api')return {code:0,stdout:JSON.stringify(args[1].includes('workflows/')?{workflow_runs:[{id:42,display_title:'Migration page '+job.id}]}:{status:'completed',conclusion:'success',head_sha:'commit-1',html_url:'https://github.com/example/repo/actions/runs/42'})};
+  if(args[0]==='run'&&args[1]==='download'){
+   await fs.writeFile(path.join(root,'worker-result.json'),JSON.stringify(result));
+   await fs.writeFile(path.join(root,'report.json'),JSON.stringify(report));
+  }
+  return {code:0,stdout:''};
+ };
+ try {
+  const actual=await migrateWithActions(job,root,{signal:new AbortController().signal,update:()=>{},runner,repository:'example/repo',pollMs:1});
+  assert.equal(actual.status,'needs-review');
+  assert.ok(calls[0].includes('source_url='+job.url));
+  assert.ok(calls.some(args=>args[0]==='run'&&args[1]==='download'));
+  assert.equal(JSON.parse(await fs.readFile(path.join(root,'worker-provenance.json'))).runId,42);
+ } finally {await fs.rm(root,{recursive:true,force:true});}
+});
+test('cancelled remote work cancels its exact Actions run',async()=>{
+ const controller=new AbortController(),calls=[];
+ const runner=async(_command,args)=>{
+  calls.push(args);
+  if(args[0]==='api'){
+   if(args[1].includes('workflows/'))return {code:0,stdout:JSON.stringify({workflow_runs:[{id:73,display_title:'Migration page '+job.id}]})};
+   controller.abort();return {code:0,stdout:JSON.stringify({status:'in_progress'})};
+  }
+  return {code:0,stdout:''};
+ };
+ await assert.rejects(()=>migrateWithActions(job,'unused',{signal:controller.signal,update:()=>{},runner,repository:'example/repo',pollMs:1}));
+ assert.ok(calls.some(args=>args[0]==='run'&&args[1]==='cancel'&&args[2]==='73'));
+});
