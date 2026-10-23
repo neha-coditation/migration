@@ -57,5 +57,52 @@ and callback path succeed. No human approval or verified result is fabricated.
 
 ## Evidence
 
-Production deployment and smoke-test results are recorded after execution in the
-release verification artifact. Development evidence remains in NEON-DEPLOYMENT.md.
+[Release PR #8](https://github.com/neha-coditation/migration/pull/8) is merged.
+Release tag: `production-worker-20261023-v1`, commit
+`3dcb304ed0795754b83e217016d3fda1df132607`.
+
+[CI 39939134259](https://github.com/neha-coditation/migration/actions/runs/39939134259)
+passed all 79 tests (including PostgreSQL fencing/rollback and five production
+isolation/provenance tests) and actual browser-mode fixture QA with an Astro build.
+Both development and production Function bundle checks passed.
+
+[Deployment 39939641739](https://github.com/neha-coditation/migration/actions/runs/39939641739)
+succeeded. Neon confirmed production `migrationworker` deployment 1 active and
+completed. Its environment contains only the service hash, pinned worker ref and
+release SHA; no development dashboard authentication configuration or persistent
+personal GitHub token was deployed.
+
+The production URL is
+`https://br-proud-hall-b5rtedf4-migrationworker.compute.c-7.us-east-2.aws.neon.tech/`.
+Live probes returned 401 for missing/invalid service credentials, 401 for a
+machine credential requesting dashboard routes, and 503 for dispatch without the
+request-scoped GitHub credential (before consuming a job attempt).
+
+Smoke-test project: `a18d8f39-8404-4520-9666-37c13027197c`.
+Smoke-test job: `ea497fd0-3dbf-4932-9baf-815e5506cf0c`.
+[Production smoke run 39939785351](https://github.com/neha-coditation/migration/actions/runs/39939785351)
+was created by the production endpoint with HTTP 202 on database attempt 1.
+The initial Actions attempt had unusually slow Ubuntu package downloads and was
+canceled before any job claim. After confirming cancellation and an unclaimed
+job, the same Actions run was retried (Actions run attempt 2) without resetting
+any database lease or result. The retry succeeded in 5m39s. The production endpoint
+received the actual claim, run binding, progress/heartbeats and completion.
+
+Neon records **needs-review**, progress 100, database attempt 1 and run
+`39939785351`, with the lease cleared. Actual Astro build and desktop/mobile
+browser QA executed. The remaining page findings are remote runtime dependencies,
+fidelity regressions and interaction regressions; no verified verdict or human
+approval was fabricated.
+
+Completion atomically saved artifact ID `12496670351`, object key
+`github-actions/39939785351/12496670351`, size 79,543,785 bytes, SHA-256
+`13bf9861085ae6b48efe9277eb5cc76786c17db4bb333874ac337b2efe6176dd`,
+release commit `3dcb304ed0795754b83e217016d3fda1df132607` and expiry
+`2027-01-21T10:40:37Z`. An independent GitHub API read matched all metadata to the
+production record. The production worker release is ready with evidence for this
+machine-service scope. No migrated website was published or cut over.
+
+The requested push and production smoke test are complete. Resume page-quality
+work later using this run's artifact; no follow-up monitor was scheduled.
+
+Development evidence remains in NEON-DEPLOYMENT.md.
