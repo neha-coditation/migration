@@ -61,6 +61,7 @@ const server=createServer(async(req,res)=>{
     else if(action==='add-page')result=await projects.addPath(p.id,input.path);
     else if(action==='migrate')result=await projects.start(p.id,input);
     else if(action==='stop')result=await projects.stop(p.id,cancelJob);
+    else if(action==='finish')result=await projects.finish(p.id);
     else if(action==='combine')result=await projects.combine(p.id,input.routes);
     else if(action==='preview'){json(res,200,{url:await projects.preview(p.id)});return;}
     else if(action==='git/prepare'){json(res,200,{staging:await github.prepare(p.id,input)});return;}
