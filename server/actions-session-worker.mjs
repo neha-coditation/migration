@@ -23,7 +23,7 @@ export async function migrateSessionWithActions(project,pages,{onPage,onMetadata
  const seen=new Set();
  try{
   await cli(['variable','set',flag,'--body','running','--repo',repo]);
-  if(!runId||project.sessionFinished){
+  if(!runId||project.sessionFinished||project.sessionResumeRequested){
    runId=null;
    await cli(['workflow','run','migration-session-worker.yml','--repo',repo,'--ref','main',
     '-f','session_id='+sessionId,
@@ -49,7 +49,7 @@ export async function migrateSessionWithActions(project,pages,{onPage,onMetadata
       if(index<0||index>=pages.length)throw new Error('Unexpected session page artifact index');
       const dir=path.join(data,'session-downloads',sessionId,item.name);
       await fs.mkdir(dir,{recursive:true});
-      await cli(['run','download',String(runId),'--repo',repo,'--name',item.name,'--dir',dir],{timeout:180000});
+      await cli(['run','download',String(sourceRun),'--repo',repo,'--name',item.name,'--dir',dir],{timeout:180000});
       const checkpoint=JSON.parse(await fs.readFile(path.join(dir,'session-checkpoint.json'),'utf8'));
       const report=JSON.parse(await fs.readFile(path.join(dir,'report.json'),'utf8'));
       const url=pages[index].url;
@@ -70,7 +70,7 @@ export async function migrateSessionWithActions(project,pages,{onPage,onMetadata
       await fs.copyFile(path.join(dir,'migration.zip'),path.join(output,'migration.zip'));
       const archived=JSON.parse(await fs.readFile(path.join(output,'report.json'),'utf8'));
       if(archived.source!==report.source||archived.status!==report.status)throw new Error('Report differs from migration archive');
-      await onPage?.({page:pages[index],report,jobId:localId,runId,artifactId:item.id});
+      await onPage?.({page:pages[index],report,jobId:localId,runId:sourceRun,artifactId:item.id});
       seen.add(item.name);
      }
     }
