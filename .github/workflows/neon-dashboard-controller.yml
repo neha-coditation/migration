@@ -1,0 +1,32 @@
+name: Migration Studio queue and evidence controller
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/5 * * * *'
+permissions:
+  contents: read
+  actions: write
+concurrency:
+  group: migration-studio-controller
+  cancel-in-progress: false
+jobs:
+  sync:
+    if: github.ref == 'refs/heads/main'
+    environment: neon-production
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Dispatch queued pages and sync verified worker evidence
+        run: node scripts/neon-dashboard-controller.mjs
+        env:
+          STUDIO_URL: https://migration-studio-testing-neha.woolly-vale-7768.chatgpt.site
+          STUDIO_SERVICE_TOKEN: ${{ secrets.STUDIO_SERVICE_TOKEN }}
+          STUDIO_CONTROLLER_TOKEN: ${{ secrets.STUDIO_CONTROLLER_TOKEN }}
+          NEON_PROD_WORKER_TOKEN: ${{ secrets.NEON_PROD_WORKER_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
