@@ -19,7 +19,6 @@ test('one Actions dispatch ingests a completed page artifact with its QA evidenc
  const bytes=await zip.generateAsync({type:'nodebuffer'});
  const runner=async(program,args)=>{
   assert.equal(program,'gh');calls.push(args);
-  if(args[0]==='variable')return {code:0,stdout:''};
   if(args[0]==='workflow')return {code:0,stdout:''};
   if(args[0]==='run'&&args[1]==='download'){
    const dir=args[args.indexOf('--dir')+1];await fs.mkdir(dir,{recursive:true});
@@ -50,10 +49,10 @@ test('one Actions dispatch ingests a completed page artifact with its QA evidenc
   assert.equal(JSON.parse(saved).source,url);
  }finally{await fs.rm(data,{recursive:true,force:true});}
 });
-test('Finish migration sets only this session flag',async()=>{
+test('Finish migration dispatches a control workflow fenced to this run',async()=>{
  const calls=[];
- await setSessionFinish({sessionId:'11111111-1111-4111-8111-111111111111'},{
+ await setSessionFinish({sessionId:'11111111-1111-4111-8111-111111111111',sessionRunId:99},{
   repository:'owner/repo',runner:async(program,args)=>{calls.push(args);return {code:0};}
  });
- assert.deepEqual(calls,[['variable','set','MIGSESSION_11111111111141118111111111111111','--body','finish','--repo','owner/repo']]);
+ assert.deepEqual(calls,[['workflow','run','migration-session-control.yml','--repo','owner/repo','--ref','main','-f','session_id=11111111-1111-4111-8111-111111111111','-f','target_run_id=99']]);
 });
