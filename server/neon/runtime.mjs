@@ -1,6 +1,7 @@
 import {timingSafeEqual, createHash} from 'node:crypto';
 import {NeonControllerState} from './controller-state.mjs';
 import {createNeonApi} from './api-handler.mjs';
+import {createWorkerApi} from './worker-api.mjs';
 
 /**
  * Development-only single-user bearer authentication.
@@ -23,14 +24,18 @@ export function createDevelopmentAuthenticator({tokenHash, subject}) {
  * Creates a fetch handler only after trusted Postgres and authentication
  * implementations are supplied. No public deployment is enabled by default.
  */
-export function createNeonRuntime({db, authenticate}) {
+export function createNeonRuntime({db, authenticate, worker}) {
   if (!db || typeof db.query !== 'function') throw new TypeError('Parameterized PostgreSQL client required');
   if (typeof authenticate !== 'function') throw new TypeError('Verified authenticator required');
   const state = new NeonControllerState(db);
   const api = createNeonApi({state, authenticate});
+  const workerApi = worker ? createWorkerApi({db,...worker}) : null;
   return async request => {
     if (new URL(request.url).protocol !== 'https:') {
       return Response.json({error:'HTTPS required'}, {status:403});
+    }
+    if (new URL(request.url).pathname.startsWith('/api/neon/worker/')) {
+      return workerApi ? workerApi(request) : Response.json({error:'Worker disabled'}, {status:503});
     }
     return api(request);
   };

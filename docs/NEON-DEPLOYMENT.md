@@ -30,3 +30,90 @@ References: https://neon.com/docs/compute/functions/reference/runtime-limits and
 ## Executed worker verification
 
 GitHub Actions run 39917939336 completed successfully on Ubuntu 22.04. The running app dispatched it, downloaded the artifact, validated its page identity and imported its build and browser QA evidence. The measured result was Review needed (maximum screenshot difference 8.34%, text differences, and unestablished fidelity); it was not marked verified. The first Ubuntu 24.04 attempt failed because its Chromium sandbox was unavailable; no sandbox protections were disabled. The worker runner was changed to Ubuntu 22.04 and retested successfully. Unit tests: 49 passed, including exact artifact identity, actual browser evidence, cancellation and review-to-next-page transitions. The local pipeline integration also passed its explicit browser-blocked fallback assertions; that local run is separate from the successful remote browser run.
+
+## Neon → Actions integration
+
+`/api/neon/worker/{dispatch,claim,progress,complete}` accepts POST requests
+with a separate service bearer token. Dashboard tokens cannot use these routes.
+The Function remains disabled for workers unless `WORKER_AUTH_TOKEN_SHA256`
+is set. Configure `MIGRATION_WORKER_REPOSITORY=neha-coditation/migration`,
+`MIGRATION_WORKER_REF` (the reviewed feature branch or commit), and
+optionally `GITHUB_WORKER_TOKEN` with Actions write access to this repository. Never
+reuse the dashboard credential. The existing Function bundle now includes the
+worker handler; no database migration is needed.
+
+On GitHub, configure `NEON_DEV_WORKER_API_URL` as the origin
+`https://br-quiet-hat-b5fslf7n-migrationapi.compute.c-7.us-east-2.aws.neon.tech`
+and secret `NEON_DEV_WORKER_TOKEN` matching the hash configured in the dev
+Function. The client rejects other origins. Do not change production settings.
+Deploying this feature is a separate operation; creating the PR does not deploy it.
+The workflow must be registered on the default branch before GitHub accepts its
+workflow_dispatch event; the feature ref must contain the same workflow.
+
+POST dispatch with `{"jobId":"53038615-f229-4e45-b6a0-ea1710a368af"}`
+using the worker credential only after dev configuration and deployment.
+Dispatch atomically claims that specific queued or expired job with a random
+lease owner and incremented attempt. GitHub receives identifiers, never secrets
+or source URLs. The worker claims the authoritative source URL and binds its run
+ID. Every progress/heartbeat/completion requires the live lease, exact attempt,
+owner and bound run. The lease lasts 15 minutes; heartbeats renew it every minute.
+Retries with a lost dispatch response wait for expiry; they never immediately
+release potentially dispatched work. After max_attempts an operator must inspect
+the failed/expired job; no automatic attempt reset or success is synthesized.
+
+Completion records artifact metadata and the terminal job state in one SQL
+statement. Exact terminal retries are idempotent. Conflicting or stale callbacks
+return 409. Success requires actual build and browser check evidence, and an
+artifact whose run, digest, size and unexpired status match GitHub's API.
+Artifact keys are `github-actions/<run-id>/<artifact-id>`; Postgres metadata is
+durable, but GitHub blobs expire after 90 days (repository policy may shorten
+this). This is not permanent object storage. No download or preview endpoint or
+cross-provider archival is supplied. Do not present expired artifacts as usable.
+Failure callbacks preserve partial progress and never claim verified completion.
+
+The supplied homepage job was observed queued at attempt 0 before development.
+No dispatch, completion, dev deployment or production write was performed as part
+of implementation. Hosted end-to-end verification requires the configuration above.
+
+The dev deployment workflow accepts secret `NEON_DEV_WORKER_TOKEN_SHA256`
+and variable `NEON_DEV_WORKER_REF` together. Partial configuration fails before
+deployment; leaving both unset keeps the worker API disabled. A stored
+`NEON_DEV_GITHUB_WORKER_TOKEN` is optional. The dashboard and worker
+hashes must differ. The Actions worker uses `NEON_DEV_WORKER_TOKEN` separately.
+
+Run database integration tests against a disposable **local** PostgreSQL database:
+`NEON_WORKER_TEST_DATABASE_URL=postgresql://localhost/test_db node --test test/neon-worker-postgres.test.mjs`.
+The test rejects remote hosts and removes its own fixture rows. It checks concurrent
+dispatch, run binding, expired/reclaimed leases, monotonic progress, transactional
+rollback of completion when metadata insertion fails, exact retry deduplication and
+terminal job protection. The standard suite skips this test unless configured.
+
+### Validation for this feature
+
+All 21 Neon tests passed, including the local PostgreSQL concurrency and rollback
+integration test. The Function ZIP was built and inspected with `worker-api.mjs`
+included. The full unit suite reported 65 passes and five failures in
+`test/reviews.test.mjs`; all five were reproduced from unchanged HEAD (the tests
+expect per-page default behavior while the existing implementation defaults to
+batch). These existing failures were not changed in this worker feature.
+`npm run test:pipeline` passed with a real Astro build and explicit HTTP fallback;
+browser QA did not run because Chromium was not installed. No hosted Neon→Actions
+migration or successful homepage completion is claimed by these local tests.
+
+
+## Follow-up fixes and credential lifetime
+
+The local project service again defaults to per-page review, matching the UI and
+existing review tests. Explicit batch requests still run sequentially without
+pauses. A heartbeat now retains the most recent pipeline stage instead of
+replacing it with a generic stage.
+
+A persistent personal GitHub token is not required. With no `GITHUB_WORKER_TOKEN`
+in the Function, an authenticated dispatch caller supplies `X-GitHub-Token` for
+that request only. Missing credentials are rejected before consuming an attempt.
+The completion callback supplies its workflow's short-lived, Actions-read
+`GITHUB_TOKEN` for artifact verification. Tokens are neither persisted in
+Postgres nor returned in JSON. The worker bearer credential remains separate.
+The standard deployment main-branch guard remains intact. The PR CI now runs the
+full suite with a real disposable PostgreSQL service and requires browser-mode
+pipeline evidence, rather than allowing fallback to count as browser validation.
