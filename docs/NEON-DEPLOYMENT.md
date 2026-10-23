@@ -1,119 +1,167 @@
-# Neon deployment status — 23 October 2026
+# Neon development worker integration — 23 October 2026
 
-The user selected Neon for the backend and GitHub Actions in neha-coditation/migration for browser workers.
+The development API and Actions worker are connected for
+`neha-coditation/migration`. All operations described below target Neon project
+`bitter-rain-72060505`, development branch `br-quiet-hat-b5fslf7n`.
+No production deployment, production database write, DNS change or source-site
+form submission was performed.
 
-## Verified infrastructure
+## Delivered behavior
 
-A separate Neon branch named migration-studio-runtime-check was created in project bitter-rain-72060505. Diagnostic Function migrationcheck was deployed. It returned HTTP 200 on Linux arm64 with Node 24.22.1. No Chromium executable was installed. Its ldconfig probe did not find libnss3, libnspr4, libatk, libatk-bridge, libX11, libxcb, libxkbcommon, libgbm or libasound. This is evidence that the current local-browser pipeline cannot be deployed unchanged, not a claim that Neon can never run a custom browser binary.
+- Authenticated project creation, ownership-scoped reads and durable page jobs.
+- Separate worker service authentication for dispatch, claim, progress and completion.
+- Atomic targeted dispatch claims with random lease owner and incremented attempt.
+- Worker run binding and fencing by job, owner, attempt, run ID and live lease.
+- Monotonic progress and one-minute heartbeats that preserve the current stage.
+- Real Astro build and Chromium QA in Actions; browser fallback cannot be accepted
+  as successful worker completion.
+- Atomic completion and durable artifact metadata writes; exact terminal retries
+  are idempotent, and stale or conflicting callbacks return 409.
+- Artifact run, job/attempt name, digest, size and expiry verification against GitHub.
+- Per-page local review is again the default. Explicit batch requests still run
+  sequentially without pausing, and draft exceptions never upgrade QA evidence.
 
-The Function is only a readiness diagnostic. It exposes no project data, database connection strings or arbitrary command execution. The temporary database endpoint used for the diagnostic was disabled after the test; the branch and Function remain. No existing production tables or live website domains were changed.
+## Executed validation
 
-## Implemented worker stage
+Implementation PR: [#6](https://github.com/neha-coditation/migration/pull/6), merged
+as `ed500c6fe0e4a05ed5ccb7b06166b724dd098a82`.
 
-The Actions workflow receives a public page URL and a job UUID, installs official Playwright Chromium plus OS dependencies, runs the existing migration pipeline, executes the real Astro build and browser QA, and uploads results. Source URLs continue to use the existing public destination policy. Source-site forms are not submitted. The workflow has read-only repository contents access and does not persist checkout credentials. The local controller can dispatch a page, follow the run, download and validate its artifact and continue the existing page review workflow. It refuses mismatched artifacts and browser-QA fallback results.
+[Integration CI 39936623168](https://github.com/neha-coditation/migration/actions/runs/39936623168)
+passed all **74 tests**, with zero failures or skips. Its disposable PostgreSQL
+service exercised concurrent dispatch, run binding, expired/reclaimed leases,
+monotonic progress, transaction rollback when artifact insertion fails, exact
+completion retries and terminal-job protection. The same CI ran the controlled
+two-page fixture through actual Chromium capture, Astro build and browser QA,
+and explicitly asserted browser-mode evidence. The Function build check passed.
 
-## Required before the full online app can launch
+The full local suite passed 73 tests with zero failures; its one PostgreSQL test
+was skipped without the database URL. Local pipeline verification performed an
+actual Astro build and passed explicit HTTP-fallback assertions. Chromium was not
+installed locally. These local fallback results are separate from CI's executed
+browser pipeline.
 
-1. Replace the loopback Node HTTP listener with a Neon Functions fetch-handler adapter.
-2. Authenticate dashboard users and authorize every project, job and artifact request.
-3. Move project/job state and transactional command claims to Postgres. The existing in-memory queue and filesystem writes are not a cloud queue.
-4. Store captured resources, screenshots, intermediate revisions and ZIPs in durable object storage. Isolate evictions must not lose progress.
-5. Dispatch Actions using an application-scoped GitHub integration, or have authenticated Actions workers claim durable queue entries. The local gh login cannot simply be assumed in Neon.
-6. Receive authenticated worker completion callbacks, deduplicate retries and retain exact job/revision provenance.
-7. Serve previews and downloads over authenticated HTTPS routes, replacing local ephemeral ports.
-8. Test sign-in, discovery, migration, actual browser QA, manual review, automatic next page, restart/retry, combination and download end to end in the hosted app.
+The five previous review tests now pass: the service default was corrected from
+batch to the documented per-page behavior, while preserving explicit batch mode.
 
-Neon Functions can be evicted; their waitUntil work is limited to 15 minutes and is explicitly not a background job runner. Migration worker jobs therefore belong in Actions, with durable queue state in Neon. Backend hosting is not complete until the eight checks above pass.
+[Development deployment 39937026712](https://github.com/neha-coditation/migration/actions/runs/39937026712)
+succeeded through the existing main-only workflow. Neon confirmed completed,
+active Function deployment **4**. No persistent personal GitHub token is stored
+in that Function. Live authentication probes returned 401 for missing/invalid
+bearer tokens, and 503 for a worker-authenticated dispatch with no GitHub
+credential; that rejection occurs before consuming an attempt.
 
-References: https://neon.com/docs/compute/functions/reference/runtime-limits and https://neon.com/docs/compute/functions/deploy.
+### Homepage end-to-end run
 
-## Executed worker verification
+Application project: `b4b1ade3-b65d-4ac5-b2d1-039de4ccdcda`.
+Job: `53038615-f229-4e45-b6a0-ea1710a368af`.
 
-GitHub Actions run 39917939336 completed successfully on Ubuntu 22.04. The running app dispatched it, downloaded the artifact, validated its page identity and imported its build and browser QA evidence. The measured result was Review needed (maximum screenshot difference 8.34%, text differences, and unestablished fidelity); it was not marked verified. The first Ubuntu 24.04 attempt failed because its Chromium sandbox was unavailable; no sandbox protections were disabled. The worker runner was changed to Ubuntu 22.04 and retested successfully. Unit tests: 49 passed, including exact artifact identity, actual browser evidence, cancellation and review-to-next-page transitions. The local pipeline integration also passed its explicit browser-blocked fallback assertions; that local run is separate from the successful remote browser run.
+The authenticated dev dispatch returned 202 for attempt 1 and created
+[Actions run 39937157018](https://github.com/neha-coditation/migration/actions/runs/39937157018).
+The run completed successfully in 5m52s. Neon recorded progress through capture,
+QA and packaging, then atomically saved **needs-review**, progress 100, run ID,
+attempt 1 and artifact metadata, and cleared the lease. The downloaded evidence
+independently confirms browser capture, actual Astro build and desktop/mobile QA
+for one page with 389 resources. Maximum screenshot difference was **4.15%**.
 
-## Neon → Actions integration
+The result remains needs-review because remote runtime dependencies remain and
+fidelity/interaction regressions were observed. Some animation/control evidence
+was not established. Twenty other discovered routes were outside this homepage
+job's one-page budget. These are page-quality findings, not a failed worker
+integration, and no verified page result or human approval was fabricated.
 
-`/api/neon/worker/{dispatch,claim,progress,complete}` accepts POST requests
-with a separate service bearer token. Dashboard tokens cannot use these routes.
-The Function remains disabled for workers unless `WORKER_AUTH_TOKEN_SHA256`
-is set. Configure `MIGRATION_WORKER_REPOSITORY=neha-coditation/migration`,
-`MIGRATION_WORKER_REF` (the reviewed feature branch or commit), and
-optionally `GITHUB_WORKER_TOKEN` with Actions write access to this repository. Never
-reuse the dashboard credential. The existing Function bundle now includes the
-worker handler; no database migration is needed.
+Artifact `12494237715` has object key
+`github-actions/39937157018/12494237715`, size **78,883,091 bytes**, SHA-256
+`ddfe434b1062fac331b4bb7a8529e001b7974c134fa81266a3549a26258b500a`,
+and expires `2027-01-21T10:10:06Z`. An independent GitHub API read matched every
+one of these values and the merged source commit to the saved Neon record.
+The downloadable migration ZIP was also retrieved and its contents verified.
 
-On GitHub, configure `NEON_DEV_WORKER_API_URL` as the origin
-`https://br-quiet-hat-b5fslf7n-migrationapi.compute.c-7.us-east-2.aws.neon.tech`
-and secret `NEON_DEV_WORKER_TOKEN` matching the hash configured in the dev
-Function. The client rejects other origins. Do not change production settings.
-Deploying this feature is a separate operation; creating the PR does not deploy it.
-The workflow must be registered on the default branch before GitHub accepts its
-workflow_dispatch event; the feature ref must contain the same workflow.
+## Development configuration
 
-POST dispatch with `{"jobId":"53038615-f229-4e45-b6a0-ea1710a368af"}`
-using the worker credential only after dev configuration and deployment.
-Dispatch atomically claims that specific queued or expired job with a random
-lease owner and incremented attempt. GitHub receives identifiers, never secrets
-or source URLs. The worker claims the authoritative source URL and binds its run
-ID. Every progress/heartbeat/completion requires the live lease, exact attempt,
-owner and bound run. The lease lasts 15 minutes; heartbeats renew it every minute.
-Retries with a lost dispatch response wait for expiry; they never immediately
-release potentially dispatched work. After max_attempts an operator must inspect
-the failed/expired job; no automatic attempt reset or success is synthesized.
+The Function origin is
+`https://br-quiet-hat-b5fslf7n-migrationapi.compute.c-7.us-east-2.aws.neon.tech`.
+The worker client rejects other origins. The Function's `DATABASE_URL` is injected
+by Neon for the selected branch and never sent to a browser or callback response.
 
-Completion records artifact metadata and the terminal job state in one SQL
-statement. Exact terminal retries are idempotent. Conflicting or stale callbacks
-return 409. Success requires actual build and browser check evidence, and an
-artifact whose run, digest, size and unexpired status match GitHub's API.
-Artifact keys are `github-actions/<run-id>/<artifact-id>`; Postgres metadata is
-durable, but GitHub blobs expire after 90 days (repository policy may shorten
-this). This is not permanent object storage. No download or preview endpoint or
-cross-provider archival is supplied. Do not present expired artifacts as usable.
-Failure callbacks preserve partial progress and never claim verified completion.
+The existing `neon-deploy-dev.yml` retains its main-branch guard and fixed dev
+branch target. It reads these GitHub secrets/settings:
 
-The supplied homepage job was observed queued at attempt 0 before development.
-No dispatch, completion, dev deployment or production write was performed as part
-of implementation. Hosted end-to-end verification requires the configuration above.
+| Setting | Purpose |
+| --- | --- |
+| `NEON_API_KEY` | Existing Neon deployment credential |
+| `NEON_DEV_AUTH_TOKEN_SHA256` | Dashboard development bearer hash |
+| `NEON_DEV_AUTH_SUBJECT` | Development dashboard identity |
+| `NEON_DEV_WORKER_TOKEN_SHA256` | Separate worker service bearer hash |
+| `NEON_DEV_WORKER_TOKEN` | Worker bearer, supplied only to worker/callback steps |
+| `NEON_DEV_WORKER_REF` variable | Worker source ref, currently `main` |
+| `NEON_DEV_WORKER_API_URL` variable | Exact development Function origin |
 
-The dev deployment workflow accepts secret `NEON_DEV_WORKER_TOKEN_SHA256`
-and variable `NEON_DEV_WORKER_REF` together. Partial configuration fails before
-deployment; leaving both unset keeps the worker API disabled. A stored
-`NEON_DEV_GITHUB_WORKER_TOKEN` is optional. The dashboard and worker
-hashes must differ. The Actions worker uses `NEON_DEV_WORKER_TOKEN` separately.
+Worker hash and source ref must be configured together, and the dashboard and
+worker hashes must differ. With both worker settings unset, the API remains
+worker-disabled. The repository is fixed to `neha-coditation/migration` in the
+deployment environment serializer.
 
-Run database integration tests against a disposable **local** PostgreSQL database:
-`NEON_WORKER_TEST_DATABASE_URL=postgresql://localhost/test_db node --test test/neon-worker-postgres.test.mjs`.
-The test rejects remote hosts and removes its own fixture rows. It checks concurrent
-dispatch, run binding, expired/reclaimed leases, monotonic progress, transactional
-rollback of completion when metadata insertion fails, exact retry deduplication and
-terminal job protection. The standard suite skips this test unless configured.
+## Request and credential contract
 
-### Validation for this feature
+`POST /api/neon/worker/dispatch` accepts `{"jobId":"<job UUID>"}` with the worker
+bearer. With no optional `GITHUB_WORKER_TOKEN` configured in the Function, supply
+`X-GitHub-Token` with a request-scoped credential authorized to dispatch Actions
+in this repository. It is used for that request only, never persisted in Postgres
+or returned in JSON. No credential is sent as a workflow input.
 
-All 21 Neon tests passed, including the local PostgreSQL concurrency and rollback
-integration test. The Function ZIP was built and inspected with `worker-api.mjs`
-included. The full unit suite reported 65 passes and five failures in
-`test/reviews.test.mjs`; all five were reproduced from unchanged HEAD (the tests
-expect per-page default behavior while the existing implementation defaults to
-batch). These existing failures were not changed in this worker feature.
-`npm run test:pipeline` passed with a real Astro build and explicit HTTP fallback;
-browser QA did not run because Chromium was not installed. No hosted Neon→Actions
-migration or successful homepage completion is claimed by these local tests.
+The workflow receives job ID, lease owner and attempt. Its claim obtains the
+authoritative source URL and binds the actual `GITHUB_RUN_ID`. Every later
+progress or completion request must match that fence and a live lease.
 
+`POST /api/neon/worker/{claim,progress,complete}` uses the worker bearer plus job
+ID, lease owner, attempt and run ID in the JSON body. Completion forwards the
+workflow's short-lived, Actions-read `GITHUB_TOKEN` in `X-GitHub-Token` solely to
+verify uploaded artifact metadata. Progress and claim do not forward that token.
+An optional stored integration token is supported for installations that already
+have one, but this dev deployment does not require or store one.
 
-## Follow-up fixes and credential lifetime
+The lease lasts 15 minutes, renewed every minute during migration. Ambiguous
+GitHub dispatch failures retain the lease: never immediately release and repeat
+an operation GitHub may have accepted. An expired job may be reclaimed up to
+`max_attempts`; exhausted attempts require operator inspection. Terminal jobs are
+never silently reset or rerun. A failed run never becomes verified automatically.
 
-The local project service again defaults to per-page review, matching the UI and
-existing review tests. Explicit batch requests still run sequentially without
-pauses. A heartbeat now retains the most recent pipeline stage instead of
-replacing it with a generic stage.
+## Artifact durability and remaining hosted-app scope
 
-A persistent personal GitHub token is not required. With no `GITHUB_WORKER_TOKEN`
-in the Function, an authenticated dispatch caller supplies `X-GitHub-Token` for
-that request only. Missing credentials are rejected before consuming an attempt.
-The completion callback supplies its workflow's short-lived, Actions-read
-`GITHUB_TOKEN` for artifact verification. Tokens are neither persisted in
-Postgres nor returned in JSON. The worker bearer credential remains separate.
-The standard deployment main-branch guard remains intact. The PR CI now runs the
-full suite with a real disposable PostgreSQL service and requires browser-mode
-pipeline evidence, rather than allowing fallback to count as browser validation.
+Artifact keys are `github-actions/<run-id>/<artifact-id>`. Postgres retains the
+artifact identity, SHA-256, byte size and job linkage, plus repository/expiry and
+run/attempt provenance in the result manifest. Job completion and metadata
+insertion are one SQL statement, so a metadata failure cannot leave a completed
+job without its artifact record.
+
+Actions artifact blobs have 90-day retention (repository policy can shorten it).
+This is durable metadata with explicitly expiring evidence, not permanent object
+storage. Do not present expired artifacts as downloadable. Worker evidence and
+migration output are available from the authenticated GitHub Actions run.
+
+This delivers the requested Neon-to-Actions worker integration. A complete hosted
+dashboard with multi-user identity-provider login, authenticated preview/download
+routes, permanent object archival, hosted discovery/review/combination and an
+end-to-end dashboard journey remains separate product work. The loopback local
+controller is not exposed publicly by this integration.
+
+## Re-run database tests safely
+
+Use a disposable local PostgreSQL database:
+
+```sh
+NEON_WORKER_TEST_DATABASE_URL=postgresql://localhost/test_db node --test test/neon-worker-postgres.test.mjs
+```
+
+The integration test rejects remote hosts and removes only its fixture rows.
+The normal suite skips it without the explicit URL; PR CI supplies a disposable
+PostgreSQL service and runs it with the entire suite.
+
+## Earlier runtime evidence
+
+The separate `migration-studio-runtime-check` branch and `migrationcheck`
+Function were diagnostics. They showed Node 24 on Linux arm64 without the browser
+and required OS libraries. They were not the hosted application. Earlier
+standalone worker run 39917939336 did execute browser QA and returned needs-review
+(maximum screenshot difference 8.34%); it did not establish homepage verification
+for this new durable job. The current job has its own run and artifact provenance.
