@@ -22,7 +22,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   migrate:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
