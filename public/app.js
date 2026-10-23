@@ -1,8 +1,16 @@
+async function safeApiJSON(response){
+ const type=response.headers.get('content-type')||'';
+ if(!type.includes('application/json'))throw new Error('Migration API is not connected to this website yet (HTTP '+response.status+'). Use the local Studio until the secure cloud backend is deployed.');
+ const body=await response.text();
+ if(!body.trim())throw new Error('Migration API returned an empty response (HTTP '+response.status+'). Please retry or check backend health.');
+ let data;try{data=JSON.parse(body);}catch{throw new Error('Migration API returned invalid JSON (HTTP '+response.status+'). Check the backend logs.');}
+ return data;
+}
 const $=selector=>document.querySelector(selector);
 const labels={'needs-review':'Review needed',verified:'Checks passed',failed:'Failed',running:'Running',queued:'Queued',cancelled:'Cancelled',interrupted:'Interrupted'};
 const previewUrls=new Map();
 let currentId=null,loadedReportId=null,report=null,polling=false;
-async function api(url,options){const response=await fetch(url,options);const result=await response.json();if(!response.ok)throw new Error(result.error||'Request failed');return result;}
+async function api(url,options){const response=await fetch(url,options);const result=await safeApiJSON(response);if(!response.ok)throw new Error(result.error||'Request failed');return result;}
 function showError(message){$('#form-error').textContent=message;$('#form-error').classList.remove('hidden');}
 function pill(status){const span=document.createElement('span');span.className='status-pill '+status;span.textContent=labels[status]||status;return span;}
 function selectJob(job,{reveal=false}={}){if(reveal){$('#page-inspector').classList.remove('hidden');$('#inspector-route').textContent=new URL(job.url).pathname;$('#inspector-source').href=job.url;$('#inspector-message').textContent='Check results for this migration appear below.';$('#inspector-preview').classList.add('hidden');$('#inspector-preview-link').classList.add('hidden');$('#page-inspector').scrollIntoView({behavior:'smooth'});}currentId=job.id;loadedReportId=null;report=null;$('#qa-panel').classList.add('hidden');renderJob(job);}

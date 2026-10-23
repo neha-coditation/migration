@@ -1,9 +1,17 @@
+async function safeApiJSON(response){
+ const type=response.headers.get('content-type')||'';
+ if(!type.includes('application/json'))throw new Error('Migration API is not connected to this website yet (HTTP '+response.status+'). Use the local Studio until the secure cloud backend is deployed.');
+ const body=await response.text();
+ if(!body.trim())throw new Error('Migration API returned an empty response (HTTP '+response.status+'). Please retry or check backend health.');
+ let data;try{data=JSON.parse(body);}catch{throw new Error('Migration API returned invalid JSON (HTTP '+response.status+'). Check the backend logs.');}
+ return data;
+}
 (()=>{
 const el=id=>document.getElementById(id);let project=null,selected=new Set(),busy=false,loading=false,signature='',authChecked=false,inspectionSequence=0;
 el('page-check-results').append(document.getElementById('qa-panel'));
 async function inspectPage(page,showPreview){const ticket=++inspectionSequence;el('page-inspector').classList.remove('hidden');el('inspector-route').textContent=page.route;el('inspector-source').href=page.url;el('inspector-preview').classList.add('hidden');el('inspector-preview-link').classList.add('hidden');el('inspector-message').textContent=showPreview?'Preparing your migrated page…':'Check results below describe this page. “Not checked” means the app has not verified it.';selectJob(page.job);el('page-inspector').scrollIntoView({behavior:'smooth',block:'start'});if(showPreview){try{const {url}=await request(`/api/jobs/${page.job.id}/preview`,{});if(ticket!==inspectionSequence)return;el('inspector-preview').src=url;el('inspector-preview').classList.remove('hidden');el('inspector-preview-link').href=url;el('inspector-preview-link').classList.remove('hidden');el('inspector-message').textContent='This is the migrated page running locally. Open the original website to compare it. Check results are below the preview.';}catch(error){if(ticket!==inspectionSequence)return;el('inspector-message').textContent='Preview could not open: '+error.message;}}}
 const finished=['verified','needs-review','qa-blocked'];const names={'not-started':'Not started','qa-blocked':'Checks could not run','needs-review':'Review needed',verified:'Checks passed',migrating:'Migrating',failed:'Failed',cancelled:'Cancelled',interrupted:'Interrupted'};
-const request=async(url,data)=>{const r=await fetch(url,data===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}),result=await r.json();if(!r.ok)throw Error(result.error||'Request failed');return result;};
+const request=async(url,data)=>{const r=await fetch(url,data===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}),result=await safeApiJSON(r);if(!r.ok)throw Error(result.error||'Request failed');return result;};
 const fail=e=>{el('project-error').textContent=e.message||String(e);};
 async function action(fn){if(busy)return;busy=true;el('project-error').textContent='';buttons();try{await fn();}catch(e){fail(e);}finally{busy=false;buttons();}}
 function routes(){return [...selected];}
