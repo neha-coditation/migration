@@ -29,3 +29,18 @@ This API only creates and lists database records. It does **not** launch GitHub 
 4. Check missing/invalid tokens return 401 and other users cannot read projects.
 5. Create a test project and enqueue a same-origin page, and verify its DB records in the development branch.
 6. Verify queue claims/heartbeats, worker callbacks, object storage, restart recovery and download before any production deployment.
+
+
+## Manually gated deployment from GitHub Actions
+
+After merging the reviewed code into `main`, configure the GitHub Actions environment `neon-development` with required reviewers and these **environment secrets**:
+
+- `NEON_API_KEY`: a Neon API key authorized for the existing development project.
+- `NEON_DEV_AUTH_TOKEN_SHA256`: SHA-256 hex digest of a newly generated, high-entropy development bearer token.
+- `NEON_DEV_AUTH_SUBJECT`: the dedicated development identity for this single-user test.
+
+Run **Deploy Neon development API** manually from GitHub Actions on `main`. This workflow deliberately uses the fixed project `bitter-rain-72060505`, branch `br-quiet-hat-b5fslf7n` and Function slug `migrationapi`. It will not deploy if a required secret is missing or the branch isn't `main`. The environment reviewer should confirm the branch and the ZIP build before approving.
+
+The workflow builds and validates the Function ZIP immediately before using the Neon multipart deployment API. The POST is not automatically retried, because duplicate deployments are possible after uncertain network failures. Deployment acceptance **does not establish successful startup**: check the Neon Function deployment status and test an unauthenticated 401 followed by an authenticated request. Never store or print the raw bearer token in workflow logs.
+
+Do not use this development-token mechanism for a public or production app. Replace it with identity-provider-backed verification and audit all API routes before public launch.
