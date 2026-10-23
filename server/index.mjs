@@ -8,8 +8,10 @@ import {ProjectService} from './projects.mjs';
 import {GitHubService} from './github.mjs';
 import {migrate} from './pipeline.mjs';
 import {migrateWithActions} from './actions-worker.mjs';
+import {migrateSessionWithActions,setSessionFinish} from './actions-session-worker.mjs';
 import {createUrlPolicy} from './url-policy.mjs';
 import {inside,staticResponse,writeJSON,readJSON,preview} from './files.mjs';
+const sessionControllers=new Map();
 const ROOT=path.resolve(fileURLToPath(new URL('..',import.meta.url)));const DATA=path.resolve(process.env.MIGRATION_DATA_DIR||path.join(ROOT,'data'));await fs.mkdir(DATA,{recursive:true});if(!process.env.MIGRATION_WORKER_REPOSITORY){try{process.env.MIGRATION_WORKER_REPOSITORY=(await readJSON(path.join(DATA,'worker-config.json'))).repository||'';}catch{}}const jobs=new Map(),controllers=new Map(),previews=new Map();let active=false;const PORT=Number(process.env.PORT||4360);const policy=createUrlPolicy();
 for(const name of await fs.readdir(DATA)){if(!/^[a-f\d-]{36}$/.test(name))continue;try{const job=await readJSON(path.join(DATA,name,'job.json'));if(['queued','running'].includes(job.status)){job.status='interrupted';job.message='The app stopped during this migration. Start a new job to retry.';}jobs.set(job.id,job);}catch{}}
 const browserHealth=new BrowserHealth();
@@ -28,7 +30,29 @@ async function createJob(input){
  const job={id:crypto.randomUUID(),url:source.href,maxPages,extraPaths,projectId:input.projectId,visualTolerance:input.visualTolerance??2,maxRepairAttempts:input.maxRepairAttempts??0,status:'queued',stage:'queued',progress:0,message:'Waiting to start',events:[],createdAt:new Date().toISOString()};jobs.set(job.id,job);await save(job);return job;
 }
 async function cancelJob(id){const job=jobs.get(id);if(!job)return;if(job.status==='queued'){job.status='cancelled';job.message='Cancelled before starting.';await save(job);waiters.get(id)?.(job);waiters.delete(id);}controllers.get(id)?.abort();}
-const projects=new ProjectService(DATA,{getJob:id=>jobs.get(id),runPage:async(input,onCreated)=>{const job=await createJob(input);const done=new Promise(resolve=>waiters.set(job.id,resolve));await onCreated(job);processQueue();return done;}});await projects.init();const github=new GitHubService(projects);
+const projects=new ProjectService(DATA,{
+ getJob:id=>jobs.get(id),
+ runPage:async(input,onCreated)=>{const job=await createJob(input);const done=new Promise(resolve=>waiters.set(job.id,resolve));await onCreated(job);processQueue();return done;},
+ runSession:process.env.MIGRATION_WORKER_REPOSITORY ? async(p,pages,onPage,onMetadata)=>{
+  const controller=new AbortController();sessionControllers.set(p.id,controller);
+  try {
+   return await migrateSessionWithActions(p,pages,{
+    signal:controller.signal,data:DATA,onMetadata,
+    onPage:async({page,report,jobId,runId,artifactId})=>{
+     const job={id:jobId,url:page.url,projectId:p.id,maxPages:1,status:report.status,
+      progress:100,stage:'complete',message:'Completed in single session worker',
+      summary:{pages:report.pages?.length||1,resources:report.resources,failures:report.failures,warnings:report.warnings},
+      events:[],createdAt:new Date().toISOString(),completedAt:new Date().toISOString(),
+      worker:{sessionId:p.sessionId,runId,artifactId}};
+     jobs.set(job.id,job);await save(job);
+     await onPage({page,report,jobId,runId,artifactId});
+    }
+   });
+  }finally{sessionControllers.delete(p.id);}
+ } : null,
+ requestSessionFinish:process.env.MIGRATION_WORKER_REPOSITORY ? p=>setSessionFinish(p):null,
+ stopSession:process.env.MIGRATION_WORKER_REPOSITORY ? p=>{sessionControllers.get(p.id)?.abort();}:null
+});await projects.init();const github=new GitHubService(projects);
 async function checkingBrowserStatus(force=false){if(process.env.MIGRATION_WORKER_REPOSITORY){const auth=await github.status();return {status:auth.connected?'remote':'unavailable',message:auth.connected?'Migration and browser QA use GitHub Actions.':'Connect GitHub to run the checking worker.',action:'Worker repository: '+process.env.MIGRATION_WORKER_REPOSITORY+'. Each page keeps its actual QA result; remote setup does not approve previous unchecked pages.'};}return browserHealth.check({force});}
 function json(res,status,data){res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(data));}
 async function body(req){let text='';for await(const chunk of req){text+=chunk;if(text.length>4*1024*1024)throw new Error('Request body exceeds limit.');}return JSON.parse(text||'{}');}
@@ -84,5 +108,5 @@ const server=createServer(async(req,res)=>{
  }catch(error){json(res,400,{error:error.message});}
 });
 server.listen(PORT,'127.0.0.1',()=>console.log(`Astro Migration Studio http://127.0.0.1:${PORT}`));
-async function shutdown(){for(const c of controllers.values())c.abort();for(const p of previews.values())await p.close();for(const p of projects.previews.values())await p.close();for(const c of projects.discoveryControllers.values())c.abort();browserHealth.close();github.close();server.close();}
+async function shutdown(){for(const c of sessionControllers.values())c.abort();for(const c of controllers.values())c.abort();for(const p of previews.values())await p.close();for(const p of projects.previews.values())await p.close();for(const c of projects.discoveryControllers.values())c.abort();browserHealth.close();github.close();server.close();}
 process.on('SIGINT',()=>shutdown().then(()=>process.exit()));process.on('SIGTERM',()=>shutdown().then(()=>process.exit()));
