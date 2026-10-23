@@ -48,17 +48,14 @@ const results=await runMigrationSession({
   console.log(JSON.stringify({event:'page-checkpoint',sessionId,index,artifactId:uploaded.id}));
  },
  shouldFinish:async()=>{
-  // The session controller may update an Actions repository variable to 'finish'.
-  // This check happens BETWEEN pages; it never aborts an active page.
-  const name='MIGSESSION_'+sessionId.replace(/-/g,'').toUpperCase();
-  const repo=process.env.GITHUB_REPOSITORY;
-  const token=process.env.GITHUB_TOKEN;
-  if(!token||!repo)return false;
-  const response=await fetch(`https://api.github.com/repos/${repo}/actions/variables/${name}`,{headers:{Authorization:`Bearer ${token}`,Accept:'application/vnd.github+json'},signal:AbortSignal.timeout(15000)});
-  if(response.status===404)return false;
-  if(!response.ok)throw new Error('Unable to read session stop flag');
-  const item=await response.json();
-  return item.value==='finish';
+  // A small separate workflow records the finish request. The migration worker
+  // checks only between pages; it never cancels an in-progress Chromium run.
+  const token=process.env.GITHUB_TOKEN,repo=process.env.GITHUB_REPOSITORY;
+  if(!token||!repo)throw new Error('Actions read access required for graceful Finish migration');
+  const response=await fetch(`https://api.github.com/repos/${repo}/actions/workflows/migration-session-control.yml/runs?event=workflow_dispatch&per_page=100`,{headers:{Authorization:`Bearer ${token}`,Accept:'application/vnd.github+json'},signal:AbortSignal.timeout(15000)});
+  if(!response.ok)throw new Error('Could not check whether this migration session should finish');
+  const listing=await response.json();
+  return (listing.workflow_runs||[]).some(run=>run.display_title===`Finish migration ${sessionId} run ${runId}`);
  }
 });
 console.log(JSON.stringify({event:'session-complete',sessionId,completed:results.completed.length,selected:pages.length,finishedEarly:results.finishedEarly}));
