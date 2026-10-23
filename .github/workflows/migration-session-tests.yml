@@ -3,10 +3,19 @@ on:
   pull_request:
     paths:
       - 'server/projects.mjs'
+      - 'server/session-engine.mjs'
+      - 'server/actions-session-worker.mjs'
+      - 'scripts/run-session-worker.mjs'
+      - 'scripts/restore-session-worker.mjs'
+      - '.github/workflows/migration-session-worker.yml'
+      - '.github/workflows/migration-session-control.yml'
       - 'server/index.mjs'
       - 'public/projects.js'
       - 'public/index.html'
       - 'test/graceful-finish.test.mjs'
+      - 'test/session-engine.test.mjs'
+      - 'test/actions-session-worker.test.mjs'
+      - 'test/project-session-integration.test.mjs'
       - '.github/workflows/migration-session-tests.yml'
 permissions:
   contents: read
@@ -27,3 +36,7 @@ jobs:
           node --check server/projects.mjs
           node --check server/index.mjs
           node --check public/projects.js
+          node --check server/actions-session-worker.mjs
+          node --check server/session-engine.mjs
+          node --check scripts/run-session-worker.mjs
+          node --check scripts/restore-session-worker.mjs
