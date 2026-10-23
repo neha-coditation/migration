@@ -23,6 +23,7 @@ export async function migrateSessionWithActions(project,pages,{onPage,onMetadata
  const seen=new Set();
  try{
   await cli(['variable','set',flag,'--body','running','--repo',repo]);
+  await onMetadata?.({sessionId,sessionRunId:runId,sessionFinished:false});
   if(!runId||project.sessionFinished||project.sessionResumeRequested){
    runId=null;
    await cli(['workflow','run','migration-session-worker.yml','--repo',repo,'--ref','main',
@@ -31,11 +32,10 @@ export async function migrateSessionWithActions(project,pages,{onPage,onMetadata
     '-f','visual_tolerance='+project.visualTolerance,
     ...(restoredRun?['-f','resume_run_id='+restoredRun]:[])]);
   }
-  await onMetadata?.({sessionId,sessionRunId:runId,sessionFinished:false});
   while(!signal?.aborted){
    if(!runId){
     const runs=await api(`repos/${repo}/actions/workflows/migration-session-worker.yml/runs?event=workflow_dispatch&per_page=100`);
-    runId=runs.workflow_runs.find(x=>x.display_title==='Migration session '+sessionId)?.id;
+    runId=runs.workflow_runs.find(x=>x.display_title==='Migration session '+sessionId&&x.id!==restoredRun)?.id;
     if(runId)await onMetadata?.({sessionId,sessionRunId:runId});
    }
    if(runId){
