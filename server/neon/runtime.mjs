@@ -4,13 +4,13 @@ import {createNeonApi} from './api-handler.mjs';
 import {createWorkerApi} from './worker-api.mjs';
 
 /**
- * Development-only single-user bearer authentication.
- * Production should use a real OIDC/JWT identity verifier.
+ * Hashed bearer authentication for trusted machine-to-machine callers.
+ * Human-facing production routes must use an OIDC/JWT identity verifier.
  * The secret is stored in the runtime environment, never in source.
  */
-export function createDevelopmentAuthenticator({tokenHash, subject}) {
+export function createServiceAuthenticator({tokenHash, subject}) {
   if (!/^[a-f0-9]{64}$/i.test(tokenHash || '') || !subject?.trim()) {
-    throw new Error('Set a 64-character DEV_AUTH_TOKEN_SHA256 and DEV_AUTH_SUBJECT');
+    throw new Error('Set a 64-character bearer token hash and a service subject');
   }
   const expected = Buffer.from(tokenHash.toLowerCase(), 'hex');
   return async token => {
@@ -19,6 +19,9 @@ export function createDevelopmentAuthenticator({tokenHash, subject}) {
     return timingSafeEqual(expected, digest) ? {subject} : null;
   };
 }
+
+// Development dashboard compatibility only. Production user routes require OIDC.
+export const createDevelopmentAuthenticator = createServiceAuthenticator;
 
 /**
  * Creates a fetch handler only after trusted Postgres and authentication

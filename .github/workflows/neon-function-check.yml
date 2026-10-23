@@ -30,6 +30,12 @@ jobs:
           unzip -Z1 dist/neon-migration-api.zip | grep -x index.mjs
           unzip -Z1 dist/neon-migration-api.zip | grep -x node_modules/pg/package.json
           if unzip -Z1 dist/neon-migration-api.zip | grep -Eq '^\\.env|secret|token'; then exit 1; fi
+      - name: Build and inspect production worker-only bundle
+        run: |
+          node scripts/build-neon-function.mjs dist/neon-production-worker.zip --worker-only
+          unzip -t dist/neon-production-worker.zip >/dev/null
+          unzip -p dist/neon-production-worker.zip index.mjs | grep -q createProductionWorker
+          unzip -Z1 dist/neon-production-worker.zip | grep -x production-worker.mjs
       - name: Save tested Neon Function ZIP
         uses: actions/upload-artifact@v4
         with:

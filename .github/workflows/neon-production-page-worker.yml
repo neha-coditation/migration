@@ -1,0 +1,68 @@
+name: Neon production page worker
+run-name: Production Neon page ${{ inputs.job_id }} attempt ${{ inputs.attempt }}
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        required: true
+        type: string
+      worker_id:
+        required: true
+        type: string
+      attempt:
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: neon-production-page-${{ inputs.job_id }}
+  cancel-in-progress: false
+jobs:
+  migrate:
+    environment: neon-production
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    env:
+      MIGRATION_JOB_ID: ${{ inputs.job_id }}
+      MIGRATION_WORKER_ID: ${{ inputs.worker_id }}
+      MIGRATION_ATTEMPT: ${{ inputs.attempt }}
+      MIGRATION_ENVIRONMENT: production
+      NEON_WORKER_API_URL: https://br-proud-hall-b5rtedf4-migrationworker.compute.c-7.us-east-2.aws.neon.tech
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - name: Claim, migrate, build and run browser QA
+        id: migration
+        env:
+          NEON_WORKER_TOKEN: ${{ secrets.NEON_PROD_WORKER_TOKEN }}
+        run: node scripts/run-page-worker.mjs
+      - name: Save evidence
+        id: evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: neon-${{ inputs.job_id }}-${{ inputs.attempt }}
+          path: worker-output/${{ inputs.job_id }}/
+          if-no-files-found: error
+          retention-days: 90
+      - name: Record durable artifact metadata and completion
+        if: always()
+        env:
+          ARTIFACT_ID: ${{ steps.evidence.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ steps.evidence.outputs.artifact-digest }}
+          GH_TOKEN: ${{ github.token }}
+          NEON_WORKER_TOKEN: ${{ secrets.NEON_PROD_WORKER_TOKEN }}
+        run: |
+          if [ -n "$ARTIFACT_ID" ]; then
+            ARTIFACT_BYTES=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID" --jq .size_in_bytes)
+            export ARTIFACT_BYTES
+          fi
+          node scripts/neon-worker-client.mjs
