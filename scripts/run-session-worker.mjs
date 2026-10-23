@@ -23,7 +23,8 @@ await fs.mkdir(root,{recursive:true});
 const browser=await launchBrowser();
 try{const page=await browser.newPage();await page.goto('about:blank');}
 finally{await browser.close();}
-const artifact=await import('@actions/artifact');
+const {DefaultArtifactClient}=await import('@actions/artifact');
+const artifact=new DefaultArtifactClient();
 const runId=process.env.GITHUB_RUN_ID;
 if(!runId)throw new Error('GitHub Actions run context required');
 const idPrefix=`migration-session-${sessionId}-page-`;
