@@ -26,10 +26,10 @@ export async function runMigrationSession({urls,root,runPage,checkpoint,shouldFi
    const result=await runPage({url,index,directory,jobId});
    if(!['verified','needs-review','qa-blocked'].includes(result.status))throw new Error('Page did not produce a completed QA result');
    // Publish first: a failed artifact upload cannot mark a page complete.
-   await checkpoint({url,index,directory,jobId,result});
    const completed={url,index,jobId,status:result.status,completedAt:new Date().toISOString()};
-   state.completed.push(completed);done.set(url,completed);
-   state.failed=state.failed.filter(x=>x.url!==url);
+   const next={...state,completed:[...state.completed,completed],failed:state.failed.filter(x=>x.url!==url)};
+   await checkpoint({url,index,directory,jobId,result,state:next});
+   state=next;done.set(url,completed);
    await writeCheckpoint(file,state);
    reportProgress({url,index,stage:'checkpointed'});
   }catch(error){
