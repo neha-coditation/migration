@@ -1,5 +1,6 @@
 name: Single-session browser migration smoke
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
