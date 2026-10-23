@@ -20,7 +20,7 @@ test('Finish migration allows active page to finish, skips rest and drafts only 
   return job;
  }});
  svc.combineReviewed=async(id,routes,options)=>{combined.push({id,routes,options});const p=svc.get(id);p.combined={createdAt:new Date().toISOString(),routes,status:'needs-review'};p.status='needs-review';return p;};
- const pages=['/','/two','/three'].map(route=>({route,url:'https://example.com'+route,jobIds:[]}));
+ const pages=['/','/two','/three'].map(route=>({route,url:'https://example.com'+route,jobIds:[],status:'not-started'}));
  const p={id:'test-project',url:'https://example.com/',origin:'https://example.com',status:'ready',pages};
  svc.projects.set(p.id,p);
  try {
