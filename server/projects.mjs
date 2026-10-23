@@ -38,7 +38,7 @@ export class ProjectService{
     p.activeRoute=p.pendingRoutes[0]||null;
     p.message='Saved page checkpoint: '+item.route+'; '+p.pendingRoutes.length+' unfinished routes remain.';
     await this.save(p);
-   },async metadata=>{Object.assign(p,metadata);await this.save(p);});
+   },async metadata=>{Object.assign(p,metadata);await this.save(p);if(p.finishRequested&&p.sessionId&&this.requestSessionFinish)await this.requestSessionFinish(p);});
    p.activeRoute=null;
    p.pendingRoutes=[];
    if(p.finishRequested){
