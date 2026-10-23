@@ -73,7 +73,7 @@ export async function migrateSessionWithActions(project,pages,{onPage,onMetadata
       if(!Array.isArray(mapping))throw new Error('Missing captured resource manifest');
       for(const asset of mapping){
        const file=asset?.file;
-       if(typeof file!=='string'||!file||file.startsWith('/')||file.includes('\\\\')||file.split('/').includes('..'))throw new Error('Unsafe captured resource name');
+       if(typeof file!=='string'||!file||file.startsWith('/')||file.includes('\\')||file.split('/').includes('..'))throw new Error('Unsafe captured resource name');
        const source=path.resolve(dir,'captured','resources',file);
        const dest=path.resolve(output,'captured','resources',file);
        const sourceBase=path.resolve(dir,'captured','resources')+path.sep;
