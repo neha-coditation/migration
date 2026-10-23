@@ -1,5 +1,7 @@
 # Neon development worker integration — 23 October 2026
 
+This records the development rollout. The later, separately authorized production worker-only release is documented in [PRODUCTION-WORKER.md](PRODUCTION-WORKER.md).
+
 The development API and Actions worker are connected for
 `neha-coditation/migration`. All operations described below target Neon project
 `bitter-rain-72060505`, development branch `br-quiet-hat-b5fslf7n`.
