@@ -1,0 +1,81 @@
+name: Migration session worker
+run-name: Migration session ${{ inputs.session_id }}
+on:
+  workflow_dispatch:
+    inputs:
+      session_id:
+        description: Stable migration session UUID
+        type: string
+        required: true
+      selected_pages_json:
+        description: JSON array of same-origin public page URLs
+        type: string
+        required: true
+      visual_tolerance:
+        description: Screenshot difference tolerance (0 to 2)
+        type: string
+        default: '0'
+        required: true
+      resume_run_id:
+        description: Optional previous Actions run ID to restore completed checkpoints
+        type: string
+        required: false
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: migration-session-${{ inputs.session_id }}
+  cancel-in-progress: false
+jobs:
+  migrate-session:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Install GitHub artifact checkpoint client
+        run: npm install --no-save --package-lock=false --ignore-scripts --no-audit --no-fund @actions/artifact@2.3.2
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - run: npx playwright install --with-deps chromium
+      - name: Restore previous completed page checkpoints
+        if: inputs.resume_run_id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.resume_run_id }}
+          SESSION_ID: ${{ inputs.session_id }}
+        run: |
+          set -euo pipefail
+          [[ "$RUN_ID" =~ ^[0-9]+$ ]] || exit 1
+          [[ "$SESSION_ID" =~ ^[0-9a-fA-F-]{36}$ ]] || exit 1
+          mkdir -p "worker-output/$SESSION_ID/restored"
+          PAGE_ARTIFACTS="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts?per_page=100" --jq '.artifacts[].name' | grep -c "^migration-session-$SESSION_ID-page-" || true)"
+          if [[ "$PAGE_ARTIFACTS" -gt 0 ]]; then
+            gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --pattern "migration-session-$SESSION_ID-page-*" --dir "worker-output/$SESSION_ID/restored"
+            node scripts/restore-session-worker.mjs
+          else
+            echo "Previous run had no completed page checkpoints; retrying the first unfinished page."
+          fi
+      - name: Migrate all unfinished selected pages in this worker
+        run: node scripts/run-session-worker.mjs
+        env:
+          MIGRATION_SESSION_ID: ${{ inputs.session_id }}
+          MIGRATION_SESSION_PAGES_JSON: ${{ inputs.selected_pages_json }}
+          MIGRATION_VISUAL_TOLERANCE: ${{ inputs.visual_tolerance }}
+          GITHUB_TOKEN: ${{ github.token }}
+      - name: Save session manifest, including partial run failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-session-${{ inputs.session_id }}-manifest-${{ github.run_id }}
+          path: worker-output/${{ inputs.session_id }}/session.json
+          if-no-files-found: ignore
+          retention-days: 7

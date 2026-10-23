@@ -1,0 +1,44 @@
+name: Single-session browser migration smoke
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/migration-session-smoke.yml'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  two-pages-one-worker:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm install --no-save --package-lock=false --ignore-scripts --no-audit --no-fund @actions/artifact@2.3.2
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - run: npx playwright install --with-deps chromium
+      - name: Set a fresh isolated session UUID
+        run: echo "MIGRATION_SESSION_ID=$(python3 -c 'import uuid;print(uuid.uuid4())')" >> "$GITHUB_ENV"
+      - name: Migrate two pages in one worker and checkpoint each one
+        env:
+          MIGRATION_SESSION_PAGES_JSON: '["https://www.coditation.com/","https://www.coditation.com/about"]'
+          MIGRATION_VISUAL_TOLERANCE: '2'
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/run-session-worker.mjs
+      - name: Save session manifest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-session-smoke-manifest-${{ github.run_id }}
+          path: worker-output/**/session.json
+          if-no-files-found: ignore
+          retention-days: 7
