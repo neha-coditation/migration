@@ -1,0 +1,40 @@
+name: Migration Studio continuous health
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+  issues: write
+concurrency:
+  group: migration-studio-health
+  cancel-in-progress: false
+jobs:
+  public-health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify public frontend and essential assets
+        id: check
+        env:
+          SITE: https://migration-studio-web.pages.dev
+        run: |
+          set -euo pipefail
+          for route in / /style.css /app.js /projects.js; do
+            status="$(curl --silent --show-error --location --max-time 20 --retry 2 --retry-delay 2 --output /tmp/health-body --write-out '%{http_code}' "$SITE$route")"
+            if [[ "$status" != 200 ]]; then echo "::error::Public route $route returned HTTP $status"; exit 1; fi
+            test -s /tmp/health-body || { echo "::error::Empty response $route"; exit 1; }
+            if [[ "$route" == / ]]; then grep -q 'Migration Studio' /tmp/health-body || { echo "::error::Landing content missing"; exit 1; }; fi
+          done
+      - name: Open or update one incident issue on failure
+        if: failure() && steps.check.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          existing="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "Migration Studio public health check failing in:title" --json number --jq '.[0].number' || true)"
+          if [[ -n "$existing" ]]; then
+            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "Health check failed again: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "Migration Studio public health check failing" --body "A scheduled public frontend smoke check failed. Logs: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID . No secrets or private URL data are included."
+          fi
