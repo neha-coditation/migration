@@ -32,9 +32,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          existing="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label automated-health --json number --jq '.[0].number' || true)"
+          existing="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "Migration Studio public health check failing in:title" --json number --jq '.[0].number' || true)"
           if [[ -n "$existing" ]]; then
             gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "Health check failed again: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           else
-            gh issue create --repo "$GITHUB_REPOSITORY" --title "Migration Studio public health check failing" --label automated-health --body "A scheduled public frontend smoke check failed. Logs: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID . No secrets or private URL data are included."
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "Migration Studio public health check failing" --body "A scheduled public frontend smoke check failed. Logs: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID . No secrets or private URL data are included."
           fi
