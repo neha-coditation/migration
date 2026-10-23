@@ -57,8 +57,13 @@ jobs:
           [[ "$RUN_ID" =~ ^[0-9]+$ ]] || exit 1
           [[ "$SESSION_ID" =~ ^[0-9a-fA-F-]{36}$ ]] || exit 1
           mkdir -p "worker-output/$SESSION_ID/restored"
-          gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --pattern "migration-session-$SESSION_ID-page-*" --dir "worker-output/$SESSION_ID/restored"
-          node scripts/restore-session-worker.mjs
+          PAGE_ARTIFACTS="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts?per_page=100" --jq '.artifacts[].name' | grep -c "^migration-session-$SESSION_ID-page-" || true)"
+          if [[ "$PAGE_ARTIFACTS" -gt 0 ]]; then
+            gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --pattern "migration-session-$SESSION_ID-page-*" --dir "worker-output/$SESSION_ID/restored"
+            node scripts/restore-session-worker.mjs
+          else
+            echo "Previous run had no completed page checkpoints; retrying the first unfinished page."
+          fi
       - name: Migrate all unfinished selected pages in this worker
         run: node scripts/run-session-worker.mjs
         env:
