@@ -93,3 +93,9 @@ BEGIN
   RETURN changed = 1;
 END;
 $$;
+
+-- Explicitly restrict function execution; grant to the authenticated server role during deployment.
+REVOKE ALL ON SCHEMA migration_studio FROM PUBLIC;
+REVOKE ALL ON ALL TABLES IN SCHEMA migration_studio FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION migration_studio.claim_page_job(text, integer) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION migration_studio.heartbeat_page_job(uuid, text, integer) FROM PUBLIC;
