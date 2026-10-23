@@ -1,0 +1,38 @@
+name: Migration Studio required validation
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: validation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm test
+      - name: Validate JavaScript entrypoints
+        run: |
+          set -euo pipefail
+          node --check server/index.mjs
+          node --check server/projects.mjs
+          node --check scripts/run-session-worker.mjs
+          node --check public/app.js
+          node --check public/projects.js
+      - name: Verify public entrypoint files
+        run: |
+          test -s public/index.html
+          test -s public/style.css
+          test -s public/app.js
+          test -s public/projects.js
