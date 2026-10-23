@@ -30,3 +30,10 @@ jobs:
           unzip -Z1 dist/neon-migration-api.zip | grep -x index.mjs
           unzip -Z1 dist/neon-migration-api.zip | grep -x node_modules/pg/package.json
           if unzip -Z1 dist/neon-migration-api.zip | grep -Eq '^\\.env|secret|token'; then exit 1; fi
+      - name: Save tested Neon Function ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: neon-function-dev-${{ github.sha }}
+          path: dist/neon-migration-api.zip
+          if-no-files-found: error
+          retention-days: 7
