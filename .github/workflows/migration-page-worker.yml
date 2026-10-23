@@ -33,6 +33,11 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci --no-audit --no-fund
+      - name: Cache Playwright Chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       - name: Install checking browser and operating system dependencies
         run: npx playwright install --with-deps chromium
       - name: Migrate and run browser QA for this page
