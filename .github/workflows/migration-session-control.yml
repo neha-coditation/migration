@@ -1,0 +1,22 @@
+name: Migration session finish signal
+run-name: Finish migration ${{ inputs.session_id }} run ${{ inputs.target_run_id }}
+on:
+  workflow_dispatch:
+    inputs:
+      session_id:
+        description: Migration session UUID
+        required: true
+        type: string
+      target_run_id:
+        description: Actions run ID to finish after its active page
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  acknowledge:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - name: Record graceful finish request
+        run: echo "A finish signal was issued for the selected migration run."
