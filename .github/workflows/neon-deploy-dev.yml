@@ -1,0 +1,61 @@
+name: Deploy Neon development API
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: neon-dev-migration-api
+  cancel-in-progress: false
+jobs:
+  deploy:
+    # This workflow only targets the isolated development Neon branch.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-22.04
+    environment: neon-development
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Test Neon API modules
+        run: node --test test/neon-*.test.mjs
+      - name: Package Neon Function
+        run: node scripts/build-neon-function.mjs
+      - name: Confirm package
+        run: |
+          unzip -t dist/neon-migration-api.zip >/dev/null
+          unzip -Z1 dist/neon-migration-api.zip | grep -x index.mjs
+          unzip -Z1 dist/neon-migration-api.zip | grep -x node_modules/pg/package.json
+      - name: Deploy only to isolated Neon development branch
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          DEV_TOKEN_HASH: ${{ secrets.NEON_DEV_AUTH_TOKEN_SHA256 }}
+          DEV_SUBJECT: ${{ secrets.NEON_DEV_AUTH_SUBJECT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$NEON_API_KEY" || -z "$DEV_TOKEN_HASH" || -z "$DEV_SUBJECT" ]]; then
+            echo 'Required Neon development secrets are missing. Deployment not attempted.' >&2
+            exit 1
+          fi
+          if [[ ! "$DEV_TOKEN_HASH" =~ ^[[:xdigit:]]{64}$ ]]; then
+            echo 'Development token hash must be a 64-character SHA-256 hex digest.' >&2
+            exit 1
+          fi
+          export DEV_TOKEN_HASH DEV_SUBJECT
+          python3 -c 'import json,os; p="/tmp/neon-dev-env.json"; open(p,"w").write(json.dumps({"DEV_AUTH_TOKEN_SHA256":os.environ["DEV_TOKEN_HASH"],"DEV_AUTH_SUBJECT":os.environ["DEV_SUBJECT"]})); os.chmod(p,0o600)'
+          trap 'rm -f /tmp/neon-dev-env.json' EXIT
+          # No retries on POST: deployment creation is non-idempotent.
+          curl --fail-with-body --silent --show-error \
+            -X POST "https://console.neon.tech/api/v2/projects/bitter-rain-72060505/branches/br-quiet-hat-b5fslf7n/functions/migrationapi/deployments" \
+            -H "Authorization: Bearer $NEON_API_KEY" \
+            -F "zip=@dist/neon-migration-api.zip;type=application/zip" \
+            -F "runtime=nodejs24" \
+            -F "environment=</tmp/neon-dev-env.json" \
+            --output /tmp/neon-deployment-response.json
+          python3 -c 'import json; d=json.load(open("/tmp/neon-deployment-response.json")); print("Neon development deployment request accepted; deployment id:",d.get("id","see Neon Console"))'
