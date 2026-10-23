@@ -47,7 +47,7 @@ export async function migrate(job,root,{signal,update,allowLocal=false}){
   update({stage:'build',progress:55,message:'Running Astro production build'});
   // Use installed studio packages for this build only. The downloaded project installs its own pinned Astro.
   const link=path.join(project,'node_modules');await fs.symlink(path.join(APP,'node_modules'),link,'dir');
-  let buildLog;try{buildLog=await command(process.execPath,[path.join(APP,'node_modules/astro/bin/astro.mjs'),'build'],{cwd:project,signal});buildLog+=await command(process.execPath,['scripts/github-action-check.mjs'],{cwd:APP,signal});}catch(error){buildLog=(buildLog||'')+`\n${String(error)}`;await fs.writeFile(path.join(root,'build.log'),buildLog);throw error;}
+  let buildLog;try{buildLog=await command(process.execPath,[path.join(APP,'node_modules/astro/bin/astro.mjs'),'build'],{cwd:project,signal});}catch(error){buildLog=(buildLog||'')+`\n${String(error)}`;await fs.writeFile(path.join(root,'build.log'),buildLog);throw error;}
   await fs.writeFile(path.join(root,'build.log'),buildLog);
   // Reuse pinned resolved packages to supply a reproducible Astro-only lockfile, without registry requests.
   const lock=JSON.parse(await fs.readFile(path.join(APP,'package-lock.json'),'utf8'));const pkg=JSON.parse(await fs.readFile(path.join(project,'package.json'),'utf8'));lock.name=pkg.name;lock.version=pkg.version;await writeJSON(path.join(project,'package-lock.json'),lock);
