@@ -44,6 +44,7 @@ export async function migrateSessionWithActions(project,pages,{onPage,onMetadata
      for(const item of listing.artifacts||[]){
       const m=new RegExp('^migration-session-'+sessionId+'-page-(\\d{5})$').exec(item.name);
       if(!m||seen.has(item.name)||item.expired)continue;
+      if(Number(item.workflow_run?.id)!==Number(sourceRun)||!Number.isSafeInteger(Number(item.id)))throw new Error('Session checkpoint artifact provenance mismatch');
       const index=Number(m[1])-1;
       if(index<0||index>=pages.length)throw new Error('Unexpected session page artifact index');
       const dir=path.join(data,'session-downloads',sessionId,item.name);
@@ -52,7 +53,7 @@ export async function migrateSessionWithActions(project,pages,{onPage,onMetadata
       const checkpoint=JSON.parse(await fs.readFile(path.join(dir,'session-checkpoint.json'),'utf8'));
       const report=JSON.parse(await fs.readFile(path.join(dir,'report.json'),'utf8'));
       const url=pages[index].url;
-      if(checkpoint.urls[index]!==url||!checkpoint.completed.some(x=>x.index===index&&x.url===url)||report.source!==url||report.build!=='passed'||report.qa?.notRun||!['verified','needs-review'].includes(report.status)){
+      if(checkpoint.urls[index]!==url||Number(checkpoint.runId)!==Number(sourceRun)||!checkpoint.completed.some(x=>x.index===index&&x.url===url&&x.status===report.status)||report.source!==url||report.build!=='passed'||report.qa?.notRun||!['verified','needs-review'].includes(report.status)){
        throw new Error('Untrusted or incomplete page checkpoint artifact');
       }
       const localId=crypto.randomUUID(),output=path.join(data,localId);
