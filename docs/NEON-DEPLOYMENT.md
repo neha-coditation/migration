@@ -26,3 +26,7 @@ The Actions workflow receives a public page URL and a job UUID, installs officia
 Neon Functions can be evicted; their waitUntil work is limited to 15 minutes and is explicitly not a background job runner. Migration worker jobs therefore belong in Actions, with durable queue state in Neon. Backend hosting is not complete until the eight checks above pass.
 
 References: https://neon.com/docs/compute/functions/reference/runtime-limits and https://neon.com/docs/compute/functions/deploy.
+
+## Executed worker verification
+
+GitHub Actions run 39917939336 completed successfully on Ubuntu 22.04. The running app dispatched it, downloaded the artifact, validated its page identity and imported its build and browser QA evidence. The measured result was Review needed (maximum screenshot difference 8.34%, text differences, and unestablished fidelity); it was not marked verified. The first Ubuntu 24.04 attempt failed because its Chromium sandbox was unavailable; no sandbox protections were disabled. The worker runner was changed to Ubuntu 22.04 and retested successfully. Unit tests: 49 passed, including exact artifact identity, actual browser evidence, cancellation and review-to-next-page transitions. The local pipeline integration also passed its explicit browser-blocked fallback assertions; that local run is separate from the successful remote browser run.
