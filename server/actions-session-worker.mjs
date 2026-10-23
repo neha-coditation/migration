@@ -67,6 +67,21 @@ export async function migrateSessionWithActions(project,pages,{onPage,onMetadata
        await fs.mkdir(path.dirname(target),{recursive:true});
        await fs.writeFile(target,await entry.async('nodebuffer'));
       }
+      // Combined projects need the original captured resources, not only Astro
+      // public files. Check every resource-map entry before marking a page done.
+      const mapping=JSON.parse(await fs.readFile(path.join(output,'resource-map.json'),'utf8'));
+      if(!Array.isArray(mapping))throw new Error('Missing captured resource manifest');
+      for(const asset of mapping){
+       const file=asset?.file;
+       if(typeof file!=='string'||!file||file.startsWith('/')||file.includes('\\')||file.split('/').includes('..'))throw new Error('Unsafe captured resource name');
+       const source=path.resolve(dir,'captured','resources',file);
+       const dest=path.resolve(output,'captured','resources',file);
+       const sourceBase=path.resolve(dir,'captured','resources')+path.sep;
+       const destBase=path.resolve(output,'captured','resources')+path.sep;
+       if(!source.startsWith(sourceBase)||!dest.startsWith(destBase))throw new Error('Captured resource path escaped root');
+       await fs.mkdir(path.dirname(dest),{recursive:true});
+       await fs.copyFile(source,dest);
+      }
       await fs.copyFile(path.join(dir,'migration.zip'),path.join(output,'migration.zip'));
       const archived=JSON.parse(await fs.readFile(path.join(output,'report.json'),'utf8'));
       if(archived.source!==report.source||archived.status!==report.status)throw new Error('Report differs from migration archive');

@@ -15,7 +15,7 @@ test('one Actions dispatch ingests a completed page artifact with its QA evidenc
  const zip=new JSZip();
  zip.file('report.json',JSON.stringify(report));
  zip.file('astro-project/src/data/pages.json','[]');
- zip.file('resource-map.json','[]');
+ zip.file('resource-map.json',JSON.stringify([{file:'css/site.css',url:'https://example.com/site.css'}]));
  const bytes=await zip.generateAsync({type:'nodebuffer'});
  const runner=async(program,args)=>{
   assert.equal(program,'gh');calls.push(args);
@@ -23,6 +23,8 @@ test('one Actions dispatch ingests a completed page artifact with its QA evidenc
   if(args[0]==='run'&&args[1]==='download'){
    const dir=args[args.indexOf('--dir')+1];await fs.mkdir(dir,{recursive:true});
    await fs.writeFile(path.join(dir,'migration.zip'),bytes);
+   await fs.mkdir(path.join(dir,'captured','resources','css'),{recursive:true});
+   await fs.writeFile(path.join(dir,'captured','resources','css','site.css'),'body{margin:0}');
    await fs.writeFile(path.join(dir,'report.json'),JSON.stringify(report));
    await fs.writeFile(path.join(dir,'session-checkpoint.json'),JSON.stringify({runId:99,urls:[url],completed:[{index:0,url,status:'needs-review'}]}));
    return {code:0,stdout:''};
@@ -47,6 +49,7 @@ test('one Actions dispatch ingests a completed page artifact with its QA evidenc
   assert.equal(seen[0].artifactId,42);
   const saved=await fs.readFile(path.join(data,seen[0].jobId,'report.json'),'utf8');
   assert.equal(JSON.parse(saved).source,url);
+  assert.equal(await fs.readFile(path.join(data,seen[0].jobId,'captured','resources','css','site.css'),'utf8'),'body{margin:0}');
  }finally{await fs.rm(data,{recursive:true,force:true});}
 });
 test('Finish migration dispatches a control workflow fenced to this run',async()=>{

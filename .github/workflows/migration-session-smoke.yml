@@ -34,6 +34,21 @@ jobs:
           MIGRATION_VISUAL_TOLERANCE: '2'
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/run-session-worker.mjs
+      - name: Verify both page checkpoint artifacts are durable
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for page in 00001 00002; do
+            found=0
+            for attempt in {1..12}; do
+              names="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?per_page=100" --jq '.artifacts[].name')"
+              if grep -Fxq "migration-session-$MIGRATION_SESSION_ID-page-$page" <<< "$names"; then found=1; break; fi
+              sleep 5
+            done
+            [[ "$found" == 1 ]] || { echo "Missing durable checkpoint page $page"; exit 1; }
+          done
       - name: Save session manifest
         if: always()
         uses: actions/upload-artifact@v4
